@@ -3,11 +3,7 @@
 //
 
 #include "snippets/transformations/insert_explicit_loads_pass.hpp"
-
-#include "snippets/isa/broadcastload.hpp"
-#include "snippets/isa/fakebroadcast.hpp"
-#include "snippets/isa/load.hpp"
-#include "snippets/isa/nop.hpp"
+#include "ngraph_ops/snippets_isa.hpp"
 
 #include <ngraph/opsets/opset1.hpp>
 #include <ngraph/rt_info.hpp>
@@ -23,7 +19,7 @@ ngraph::pass::InsertExplicitLoadsPass::InsertExplicitLoadsPass() {
 
         if (as_type_ptr<ngraph::opset1::Parameter>(root) || as_type_ptr<ngraph::opset1::Constant>(root)) {
             // create load for a parameter
-            auto load = std::make_shared<ngraph::op::snippet::Load> (root);
+            auto load = std::make_shared<ngraph::op::Load> (root);
             ngraph::copy_runtime_info(root, load);
 
             bool rewritten = false;

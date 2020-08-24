@@ -3,8 +3,8 @@
 //
 #if 0
 #include "snippets/pass/detect_broadcast_pass.hpp"
-#include "snippets/isa/load.hpp"
-#include "snippets/isa/broadcastload.hpp"
+#include "ngraph_ops/load.hpp"
+#include "ngraph_ops/broadcastload.hpp"
 
 #include <ngraph/opsets/opset1.hpp>
 #include <ngraph/rt_info.hpp>

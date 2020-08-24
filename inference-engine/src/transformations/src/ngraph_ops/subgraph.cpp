@@ -311,7 +311,7 @@ bool op::Subgraph::generate(const BlockedShapeVector& output_shapes, const Block
 
     if (m_body->get_results().size() <= 1) {
         for (auto& p : m_body->get_ops()) {
-            if (!!as_type_ptr<ngraph::op::snippet::BroadcastLoad>(p) || as_type_ptr<ngraph::op::snippet::FakeBroadcast>(p)) {
+            if (!!as_type_ptr<ngraph::op::BroadcastLoad>(p) || as_type_ptr<ngraph::op::FakeBroadcast>(p)) {
                 canBeLinearized = false;
                 break;
             }

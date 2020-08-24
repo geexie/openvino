@@ -4,13 +4,14 @@
 
 #pragma once
 
+#include <transformations_visibility.hpp>
+
 #include "ngraph/op/op.hpp"
 
 namespace ngraph {
 namespace op {
-namespace snippet {
 
-class NGRAPH_API Scalar : public Op {
+class TRANSFORMATIONS_API Scalar : public Op {
 public:
     static constexpr NodeTypeInfo type_info{"Scalar", 0};
     const NodeTypeInfo& get_type_info() const override { return type_info; }
@@ -29,7 +30,5 @@ public:
 private:
 };
 
-} // namespace snippet
-using snippet::Scalar;
 } // namespace op
 } // namespace ngraph

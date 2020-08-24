@@ -5,8 +5,8 @@
 #include "snippets/pass/assign_registers_pass.hpp"
 #include "snippets/generator.hpp"
 
-#include "snippets/isa/load.hpp"
-#include "snippets/isa/broadcastload.hpp"
+#include "ngraph_ops/load.hpp"
+#include "ngraph_ops/broadcastload.hpp"
 
 #include <ngraph/pass/visualize_tree.hpp>
 

@@ -28,7 +28,7 @@ ie_add_vs_version_file(NAME ${TARGET_NAME}
                        FILEDESCRIPTION "Inference Engine Transformations library")
 
 target_link_libraries(${TARGET_NAME} PUBLIC ${NGRAPH_LIBRARIES}
-                                     PRIVATE openvino::itt ngraph::builder pugixml)
+                                     PRIVATE openvino::itt ngraph::builder ngraph::reference pugixml)
 
 target_link_libraries(${TARGET_NAME} PUBLIC ${NGRAPH_LIBRARIES} mkldnn)
 

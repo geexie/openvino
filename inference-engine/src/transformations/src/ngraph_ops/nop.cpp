@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-#include "snippets/isa/nop.hpp"
+#include "ngraph_ops/nop.hpp"
 
 using namespace std;
 using namespace ngraph;

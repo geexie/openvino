@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-#include "snippets/isa/load.hpp"
+#include "ngraph_ops/load.hpp"
 
 #include <ngraph/runtime/host_tensor.hpp>
 

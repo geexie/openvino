@@ -9,13 +9,14 @@
 #define NGRAPH_OP(x, y)
 #endif
 
+// SnippetS dialect
 NGRAPH_OP(Load, ngraph::op)
 NGRAPH_OP(FakeBroadcast, ngraph::op)
 NGRAPH_OP(BroadcastLoad, ngraph::op)
 NGRAPH_OP(Scalar, ngraph::op)
 NGRAPH_OP(Nop, ngraph::op)
 
-// all we have for opset1
+// layout oblivious from opset1
 // NGRAPH_OP(Abs, ngraph::op::v0) +
 // NGRAPH_OP(Acos, ngraph::op::v0) +
 NGRAPH_OP(Add, ngraph::op::v1)

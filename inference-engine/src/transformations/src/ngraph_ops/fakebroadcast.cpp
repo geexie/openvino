@@ -2,11 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-#include "snippets/isa/fakebroadcast.hpp"
+#include "ngraph_ops/fakebroadcast.hpp"
 
 #include <ngraph/runtime/host_tensor.hpp>
-
-// #include "ngraph/runtime/reference/broadcast.hpp"
+#include "ngraph/runtime/reference/broadcast.hpp"
 
 using namespace std;
 using namespace ngraph;

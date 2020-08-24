@@ -6,7 +6,7 @@
 #include <ngraph/rt_info.hpp>
 
 #include "snippets/transformations/canonicalization_pass.hpp"
-#include "snippets/isa/snippet_isa.hpp"
+#include "ngraph_ops/snippets_isa.hpp"
 #include "snippets/remarks.hpp"
 
 // can be refactored with a matcher to broadcast

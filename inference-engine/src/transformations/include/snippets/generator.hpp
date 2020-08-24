@@ -6,13 +6,7 @@
 
 #include <transformations_visibility.hpp>
 
-#include "ngraph/op/op.hpp"
-#include <ngraph/opsets/opset1.hpp>
-#include "snippets/isa/load.hpp"
-#include "snippets/isa/broadcastload.hpp"
-#include "snippets/isa/fakebroadcast.hpp"
-#include "snippets/register_info.hpp"
-
+#include "ngraph_ops/snippets_isa.hpp"
 #include "jit_generator.hpp"
 
 namespace ngraph {

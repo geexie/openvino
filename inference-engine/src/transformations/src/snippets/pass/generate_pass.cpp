@@ -7,8 +7,8 @@
 #include "snippets/pass/assign_registers_pass.hpp"
 #include "snippets/remarks.hpp"
 
-#include "snippets/isa/scalar.hpp"
-#include "snippets/isa/nop.hpp"
+#include "ngraph_ops/scalar.hpp"
+#include "ngraph_ops/nop.hpp"
 
 #include <ngraph/pass/visualize_tree.hpp>
 
