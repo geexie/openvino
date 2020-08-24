@@ -2,14 +2,14 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-#include "snippets/transformations/merge_load_fakebroadcast_pass.hpp"
+#include "transformations/snippets/merge_load_fakebroadcast_pass.hpp"
 
 #include "ngraph_ops/snippets_isa.hpp"
 
 #include <ngraph/opsets/opset1.hpp>
 #include <ngraph/rt_info.hpp>
 
-#include "snippets/remarks.hpp"
+#include "transformations/snippets/remarks.hpp"
 
 #include <iostream>
 

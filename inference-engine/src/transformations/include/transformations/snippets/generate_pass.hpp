@@ -4,26 +4,27 @@
 
 #pragma once
 
-#include "ngraph/pass/pass.hpp"
-#include "../generator.hpp"
-
 #include <transformations_visibility.hpp>
+
+#include "ngraph/pass/pass.hpp"
+#include "generator.hpp"
 
 namespace ngraph {
 namespace pass {
 
-class TRANSFORMATIONS_API GenerateConstntTables : public ngraph::pass::FunctionPass {
+class TRANSFORMATIONS_API GenerateCodePass : public ngraph::pass::FunctionPass {
 public:
-    GenerateConstntTables(const Generator* generator)
+    GenerateCodePass(const Generator* generator, bool shouldLoadVectors = true)
         : FunctionPass()
-        , m_generator(generator) {
+        , m_generator(generator)
+        , m_shouldLoadVectors(shouldLoadVectors) {
         set_property(PassProperty::REQUIRE_STATIC_SHAPE, true);
     }
     bool run_on_function(std::shared_ptr<ngraph::Function> function) override;
 
 private:
     const Generator* m_generator;
+    const bool m_shouldLoadVectors;
 };
-
 } // namespace pass
 } // namespace ngraph

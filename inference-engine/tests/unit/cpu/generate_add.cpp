@@ -12,7 +12,7 @@
 #include <map>
 #include <array>
 
-#include <snippets/generator.hpp>
+#include <transformations/snippets/generator.hpp>
 
 #include <ngraph/function.hpp>
 

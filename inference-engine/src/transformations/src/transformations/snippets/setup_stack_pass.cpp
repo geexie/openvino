@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-#include "snippets/pass/setup_stack_pass.hpp"
-#include "snippets/generator.hpp"
+#include "transformations/snippets/setup_stack_pass.hpp"
+#include "transformations/snippets/generator.hpp"
 
 #include <ngraph/variant.hpp>
 

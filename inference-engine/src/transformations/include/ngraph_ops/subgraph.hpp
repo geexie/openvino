@@ -10,7 +10,7 @@
 #include "ngraph/function.hpp"
 #include "ngraph/op/op.hpp"
 
-#include "snippets/generator.hpp"
+#include "transformations/snippets/generator.hpp"
 
 namespace ngraph {
 namespace op {

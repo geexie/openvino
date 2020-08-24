@@ -5,9 +5,9 @@
 #include <ngraph/opsets/opset1.hpp>
 #include <ngraph/rt_info.hpp>
 
-#include "snippets/transformations/canonicalization_pass.hpp"
+#include "transformations/snippets/canonicalization_pass.hpp"
 #include "ngraph_ops/snippets_isa.hpp"
-#include "snippets/remarks.hpp"
+#include "transformations/snippets/remarks.hpp"
 
 // can be refactored with a matcher to broadcast
 bool ngraph::pass::CanonicalizationPass::run_on_function(std::shared_ptr<Function> f) {

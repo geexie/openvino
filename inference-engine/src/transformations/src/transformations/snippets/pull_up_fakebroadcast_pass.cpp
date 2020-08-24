@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-#include "snippets/transformations/pull_up_fakebroadcast_pass.hpp"
+#include "transformations/snippets/pull_up_fakebroadcast_pass.hpp"
 
 #include "ngraph_ops/snippets_isa.hpp"
 

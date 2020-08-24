@@ -16,7 +16,7 @@
 
 #include <ngraph/pass/visualize_tree.hpp>
 
-#include "snippets/remarks.hpp"
+#include "transformations/snippets/remarks.hpp"
 
 template <typename T>
 ngraph::OutputVector as_output_vector(const T& args) {

@@ -21,7 +21,7 @@
 #include <ngraph/rt_info.hpp>
 
 #include "ngraph_ops/subgraph.hpp"
-#include "snippets/remarks.hpp"
+#include "transformations/snippets/remarks.hpp"
 
 using namespace mkldnn;
 using namespace MKLDNNPlugin;

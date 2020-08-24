@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-#include "snippets/pass/assign_registers_pass.hpp"
-#include "snippets/generator.hpp"
+#include "transformations/snippets/assign_registers_pass.hpp"
+#include "transformations/snippets/generator.hpp"
 
 #include "ngraph_ops/load.hpp"
 #include "ngraph_ops/broadcastload.hpp"
@@ -12,7 +12,7 @@
 
 #include <ngraph/variant.hpp>
 
-#include "snippets/remarks.hpp"
+#include "transformations/snippets/remarks.hpp"
 
 // Assigning internal `vector` register indexes to Ops (virtual registers)
 bool ngraph::pass::AssignRegistersPass::run_on_function(std::shared_ptr<Function> f) {

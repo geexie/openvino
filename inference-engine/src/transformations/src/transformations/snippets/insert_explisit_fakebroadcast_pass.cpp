@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-#include "snippets/transformations/insert_explisit_fakebroadcast_pass.hpp"
+#include "transformations/snippets/insert_explisit_fakebroadcast_pass.hpp"
 
 #include "ngraph_ops/snippets_isa.hpp"
 
@@ -12,7 +12,7 @@
 #include <iostream>
 #include <numeric>
 
-#include "snippets/remarks.hpp"
+#include "transformations/snippets/remarks.hpp"
 
 static std::shared_ptr<ngraph::Node> numpy_broadcast_node(const ngraph::Output<ngraph::Node>& value,
     const ngraph::Shape& output_shape, const ngraph::Shape& source_shape) {

@@ -12,7 +12,7 @@
 #include <ngraph/variant.hpp>
 #include <ngraph/opsets/opset1.hpp>
 
-#include "snippets/register_info.hpp"
+#include "transformations/snippets/register_info.hpp"
 
 namespace ngraph {
 

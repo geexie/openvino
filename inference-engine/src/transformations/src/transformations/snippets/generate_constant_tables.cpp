@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-#include "snippets/pass/generate_constant_tables.hpp"
+#include "transformations/snippets/generate_constant_tables.hpp"
 
 bool ngraph::pass::GenerateConstntTables::run_on_function(std::shared_ptr<Function> func) {
     for (auto n : func->get_ordered_ops()) {

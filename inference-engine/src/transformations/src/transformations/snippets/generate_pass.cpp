@@ -2,10 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-#include "snippets/generator.hpp"
-#include "snippets/pass/generate_pass.hpp"
-#include "snippets/pass/assign_registers_pass.hpp"
-#include "snippets/remarks.hpp"
+#include "transformations/snippets/generator.hpp"
+#include "transformations/snippets/generate_pass.hpp"
+#include "transformations/snippets/assign_registers_pass.hpp"
+#include "transformations/snippets/remarks.hpp"
 
 #include "ngraph_ops/scalar.hpp"
 #include "ngraph_ops/nop.hpp"

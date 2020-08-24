@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 #if 0
-#include "snippets/pass/detect_broadcast_pass.hpp"
+#include "transformations/snippets/detect_broadcast_pass.hpp"
 #include "ngraph_ops/load.hpp"
 #include "ngraph_ops/broadcastload.hpp"
 

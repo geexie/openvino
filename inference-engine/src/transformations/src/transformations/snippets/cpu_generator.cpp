@@ -2,17 +2,17 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-#include "snippets/generator.hpp"
+#include "transformations/snippets/cpu_generator.hpp"
 
-#include "snippets/transformations/insert_explisit_fakebroadcast_pass.hpp"
-#include "snippets/transformations/pull_up_fakebroadcast_pass.hpp"
-#include "snippets/transformations/insert_explicit_loads_pass.hpp"
-#include "snippets/transformations/merge_load_fakebroadcast_pass.hpp"
+#include "transformations/snippets/insert_explisit_fakebroadcast_pass.hpp"
+#include "transformations/snippets/pull_up_fakebroadcast_pass.hpp"
+#include "transformations/snippets/insert_explicit_loads_pass.hpp"
+#include "transformations/snippets/merge_load_fakebroadcast_pass.hpp"
 
-#include "snippets/pass/assign_registers_pass.hpp"
-#include "snippets/pass/setup_stack_pass.hpp"
-#include "snippets/pass/generate_constant_tables.hpp"
-#include "snippets/pass/generate_pass.hpp"
+#include "transformations/snippets/assign_registers_pass.hpp"
+#include "transformations/snippets/setup_stack_pass.hpp"
+#include "transformations/snippets/generate_constant_tables.hpp"
+#include "transformations/snippets/generate_pass.hpp"
 
 #include <ngraph/pass/visualize_tree.hpp>
 #include <ngraph/rt_info.hpp>
@@ -21,8 +21,9 @@
 #include <iostream>
 #include <array>
 
-#include "snippets/remarks.hpp"
+#include "transformations/snippets/remarks.hpp"
 #include "jitters.hpp"
+
 
 using namespace std;
 using namespace ngraph;
