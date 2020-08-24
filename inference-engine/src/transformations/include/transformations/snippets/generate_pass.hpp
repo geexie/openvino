@@ -5,14 +5,14 @@
 #pragma once
 
 #include <transformations_visibility.hpp>
+#include <ngraph/pass/pass.hpp>
 
-#include "ngraph/pass/pass.hpp"
 #include "generator.hpp"
 
 namespace ngraph {
 namespace pass {
 
-class TRANSFORMATIONS_API GenerateCodePass : public ngraph::pass::FunctionPass {
+class TRANSFORMATIONS_API GenerateCodePass : public FunctionPass {
 public:
     GenerateCodePass(const Generator* generator, bool shouldLoadVectors = true)
         : FunctionPass()

@@ -3,8 +3,8 @@
 //
 
 #include "transformations/snippets/setup_stack_pass.hpp"
-#include "transformations/snippets/generator.hpp"
 
+#include <ngraph/opsets/opset1.hpp>
 #include <ngraph/variant.hpp>
 
 // Perhaps, it's better to call this pass setup constants

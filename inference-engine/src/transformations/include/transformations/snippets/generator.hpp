@@ -8,6 +8,8 @@
 
 #include "ngraph_ops/snippets_isa.hpp"
 
+// Raplace with jitter table
+
 namespace ngraph {
 namespace snippet {
 

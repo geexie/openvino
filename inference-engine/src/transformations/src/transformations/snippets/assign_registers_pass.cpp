@@ -3,17 +3,15 @@
 //
 
 #include "transformations/snippets/assign_registers_pass.hpp"
-#include "transformations/snippets/generator.hpp"
+#include "transformations/snippets/remarks.hpp"
+#include "transformations/rt_info/register_info.hpp"
+
+#include <ngraph/opsets/opset1.hpp>
 
 #include "ngraph_ops/load.hpp"
 #include "ngraph_ops/broadcastload.hpp"
 
-#include <ngraph/pass/visualize_tree.hpp>
-
-#include <ngraph/variant.hpp>
-
-#include "transformations/snippets/remarks.hpp"
-
+// FIXME: use linear time register allocation algorithm
 // Assigning internal `vector` register indexes to Ops (virtual registers)
 bool ngraph::pass::AssignRegistersPass::run_on_function(std::shared_ptr<Function> f) {
     size_t idx_start = 0;
@@ -69,10 +67,3 @@ bool ngraph::pass::AssignRegistersPass::run_on_function(std::shared_ptr<Function
 
     return false;
 }
-
-template <typename T>
-ngraph::VariantImpl<T>::~VariantImpl() { }
-
-template class ngraph::VariantImpl<std::vector<size_t>>;
-
-constexpr ngraph::VariantTypeInfo ngraph::VariantWrapper<std::vector<size_t>>::type_info;

@@ -4,15 +4,13 @@
 
 #pragma once
 
-#include <ngraph/pass/pass.hpp>
-#include <ngraph/variant.hpp>
-
 #include <transformations_visibility.hpp>
+#include <ngraph/pass/pass.hpp>
 
 namespace ngraph {
 namespace pass {
 
-class TRANSFORMATIONS_API AssignRegistersPass : public ngraph::pass::FunctionPass {
+class TRANSFORMATIONS_API AssignRegistersPass : public FunctionPass {
 public:
     AssignRegistersPass() : FunctionPass() {
         set_property(PassProperty::REQUIRE_STATIC_SHAPE, true);
@@ -21,17 +19,4 @@ public:
 };
 
 } // namespace pass
-
-extern template class TRANSFORMATIONS_API VariantImpl<std::vector<size_t>>;
-
-template <>
-class TRANSFORMATIONS_API VariantWrapper<std::vector<size_t>> : public VariantImpl<std::vector<size_t>> {
-public:
-    static constexpr VariantTypeInfo type_info{"Variant::reginfo", 0};
-    const VariantTypeInfo& get_type_info() const override { return type_info; }
-    VariantWrapper(const value_type& value)
-        : VariantImpl<value_type>(value) {
-    }
-};
-
 } // namespace ngraph

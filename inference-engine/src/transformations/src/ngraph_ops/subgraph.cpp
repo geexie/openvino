@@ -20,8 +20,6 @@
 #include "transformations/snippets/insert_explicit_loads_pass.hpp"
 #include "transformations/snippets/merge_load_fakebroadcast_pass.hpp"
 
-#include "transformations/snippets/cpu_generator.hpp"
-
 using namespace std;
 using namespace ngraph;
 
@@ -29,10 +27,14 @@ static void visualize(const std::string& name, std::shared_ptr<ngraph::Function>
     ngraph::pass::VisualizeTree(name).run_on_function(f);
 }
 
+void op::Subgraph::set_generator(std::shared_ptr<Generator> generator) {
+    m_generator = generator;
+}
+
 constexpr NodeTypeInfo op::Subgraph::type_info;
 
 op::Subgraph::Subgraph(const OutputVector& args, std::shared_ptr<Function> body)
-    : Op(args), m_body(body), generator(std::unique_ptr<Generator>(new CPUGenerator())) {
+    : Op(args), m_body(body), m_generator(nullptr) {
     constructor_validate_and_infer_types();
 }
 
@@ -275,7 +277,8 @@ bool op::Subgraph::generate(const BlockedShapeVector& output_shapes, const Block
     // visualize("DetectBroadcastPass.dot", f);
 
     // actual code mission
-    ptr = generator->generate(m_body);
+    if (m_generator != nullptr)
+        ptr = m_generator->generate(m_body);
 
     // collect constants for scheduling
     m_constants.clear();

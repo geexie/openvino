@@ -7,8 +7,9 @@
 #include <transformations_visibility.hpp>
 
 #include "ngraph_ops/snippets_isa.hpp"
+#include "transformations/snippets/generator.hpp"
+
 #include "jit_generator.hpp"
-#include "generator.hpp"
 
 namespace ngraph {
 namespace snippet {

@@ -2,11 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-#include <ngraph/opsets/opset1.hpp>
-#include <ngraph/rt_info.hpp>
 
-#include "transformations/snippets/canonicalization_pass.hpp"
-#include "ngraph_ops/snippets_isa.hpp"
+#include "transformations/snippets/canonicalize_pass.hpp"
 #include "transformations/snippets/remarks.hpp"
 
 // can be refactored with a matcher to broadcast

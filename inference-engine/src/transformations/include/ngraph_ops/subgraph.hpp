@@ -39,6 +39,10 @@ public:
         return m_body;
     }
 
+    std::shared_ptr<Generator> get_generator() const {
+        return m_generator;
+    }
+
     bool generate(const BlockedShapeVector& output_shapes, const BlockedShapeVector& input_shapes);
     bool evaluate(const HostTensorVector& output_values, const HostTensorVector& input_values) const override;
 
@@ -48,7 +52,7 @@ public:
     // plugin sets generator for a snippet to some specific generator.
     // if there is no such generator it evaluates using nGraph references
     // it's going to be replaced with Jitters table later
-    // void set_generator(std::shared_ptr<Generator> body);
+    void set_generator(std::shared_ptr<Generator> generator);
 
 private:
     std::shared_ptr<Function> m_body;
@@ -57,7 +61,7 @@ private:
     Shape work_size;
     bool canBeLinearized {false};
 
-    std::unique_ptr<Generator> generator;
+    std::shared_ptr<Generator> m_generator;
     code ptr {nullptr};
 };
 

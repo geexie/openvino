@@ -23,6 +23,8 @@
 #include "ngraph_ops/subgraph.hpp"
 #include "transformations/snippets/remarks.hpp"
 
+#include "emitters/cpu_generator.hpp"
+
 using namespace mkldnn;
 using namespace MKLDNNPlugin;
 using namespace InferenceEngine;
@@ -110,18 +112,19 @@ auto static print_dims = [](const InferenceEngine::SizeVector& dims) -> void {
 
 MKLDNNPlugin::MKLDNNSnippetNode::MKLDNNSnippetNode(const InferenceEngine::CNNLayerPtr& layer, const mkldnn::engine& eng, MKLDNNWeightsSharing::Ptr &cache)
         : MKLDNNNode(layer, eng, cache) {
-    snippet_ref = this->getCnnLayer()->getNode();
-
-    if (auto subgraph = ngraph::as_type_ptr<ngraph::op::Subgraph>(snippet_ref)) {
+    if ((snippet_ref = ngraph::as_type_ptr<ngraph::op::Subgraph>(this->getCnnLayer()->getNode()))) {
         ngraph::OutputVector subgraph_node_inputs;
         for (auto input : snippet_ref->input_values()) {
             subgraph_node_inputs.push_back(input);
         }
-        auto new_body = ngraph::clone_function(*subgraph->get_body().get());
-
+        auto new_body = ngraph::clone_function(*snippet_ref->get_body().get());
         snippet = std::make_shared<ngraph::op::Subgraph>(subgraph_node_inputs, new_body);
         ngraph::copy_runtime_info(snippet_ref, snippet);
         snippet->set_friendly_name(snippet_ref->get_friendly_name());
+        snippet->set_generator(std::make_shared<ngraph::snippet::CPUGenerator>());
+    } else {
+        snippet_ref.reset();
+        snippet.reset();
     }
 
     remark(1) << snippet->get_friendly_name() << " is stored to NODE\n"

@@ -4,18 +4,16 @@
 
 #pragma once
 
-#include <ngraph/pass/graph_rewrite.hpp>
 #include <transformations_visibility.hpp>
+#include <ngraph/pass/graph_rewrite.hpp>
 
 namespace ngraph {
 namespace pass {
 
-class TRANSFORMATIONS_API MergeLoadFakeBroadcastToBroadcastLoadPass;
-
-}  // namespace pass
-}  // namespace ngraph
-
-class ngraph::pass::MergeLoadFakeBroadcastToBroadcastLoadPass: public ngraph::pass::GraphRewrite {
+class TRANSFORMATIONS_API MergeLoadFakeBroadcastToBroadcastLoadPass: public GraphRewrite {
 public:
     MergeLoadFakeBroadcastToBroadcastLoadPass();
 };
+
+}  // namespace pass
+}  // namespace ngraph

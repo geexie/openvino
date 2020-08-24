@@ -4,9 +4,10 @@
 
 #pragma once
 
+#include <transformations_visibility.hpp>
 #include <ngraph/pass/pass.hpp>
 
-#include <transformations_visibility.hpp>
+// FIXME: this file should be rewritten once codegen is moved to jitters and global string-based constant table
 
 namespace ngraph {
 namespace pass {
@@ -20,29 +21,4 @@ public:
 };
 
 } // namespace pass
-
-// class TRANSFORMATIONS_API StackInfo {
-// private:
-//     size_t offset;
-//     size_t usage;
-
-// public:
-//     StackInfo() = default;
-
-//     explicit StackInfo(size_t offset, size_t usage) : offset(offset), usage(usage) {
-//     }
-
-//     std::string getStackInfo() const;
-// };
-
-// template <>
-// class TRANSFORMATIONS_API VariantWrapper<std::vector<size_t>> : public VariantImpl<std::vector<size_t>> {
-// public:
-//     static constexpr VariantTypeInfo type_info{"Variant::reginfo", 0};
-//     const VariantTypeInfo& get_type_info() const override { return type_info; }
-//     VariantWrapper(const value_type& value)
-//         : VariantImpl<value_type>(value) {
-//     }
-// };
-
 } // namespace ngraph

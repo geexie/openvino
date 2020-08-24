@@ -6,6 +6,7 @@
 #include "transformations/snippets/generate_pass.hpp"
 #include "transformations/snippets/assign_registers_pass.hpp"
 #include "transformations/snippets/remarks.hpp"
+#include "transformations/rt_info/register_info.hpp"
 
 #include "ngraph_ops/scalar.hpp"
 #include "ngraph_ops/nop.hpp"

@@ -4,15 +4,17 @@
 
 #pragma once
 
-#include "ngraph/pass/pass.hpp"
+#include <transformations_visibility.hpp>
+#include <ngraph/pass/pass.hpp>
+
 #include "generator.hpp"
 
-#include <transformations_visibility.hpp>
+// this file should be rewritten once codegen is moved to jitters and global string-based constant table
 
 namespace ngraph {
 namespace pass {
 
-class TRANSFORMATIONS_API GenerateConstntTables : public ngraph::pass::FunctionPass {
+class TRANSFORMATIONS_API GenerateConstntTables : public FunctionPass {
 public:
     GenerateConstntTables(const Generator* generator)
         : FunctionPass()

@@ -4,18 +4,16 @@
 
 #pragma once
 
-#include <ngraph/pass/graph_rewrite.hpp>
 #include <transformations_visibility.hpp>
+#include <ngraph/pass/graph_rewrite.hpp>
 
 namespace ngraph {
 namespace pass {
 
-class TRANSFORMATIONS_API InsertExplicitFakeBroadcastPass;
-
-}  // namespace pass
-}  // namespace ngraph
-
-class ngraph::pass::InsertExplicitFakeBroadcastPass: public ngraph::pass::GraphRewrite {
+class TRANSFORMATIONS_API InsertExplicitFakeBroadcastPass: public GraphRewrite {
 public:
     InsertExplicitFakeBroadcastPass();
 };
+
+}  // namespace pass
+}  // namespace ngraph

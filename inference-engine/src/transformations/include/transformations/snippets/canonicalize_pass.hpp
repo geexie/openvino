@@ -4,13 +4,13 @@
 
 #pragma once
 
-#include <ngraph/pass/pass.hpp>
 #include <transformations_visibility.hpp>
+#include <ngraph/pass/pass.hpp>
 
 namespace ngraph {
 namespace pass {
 
-class TRANSFORMATIONS_API CanonicalizationPass : public ngraph::pass::FunctionPass {
+class TRANSFORMATIONS_API CanonicalizationPass : public FunctionPass {
 public:
     CanonicalizationPass() : FunctionPass() {
     }

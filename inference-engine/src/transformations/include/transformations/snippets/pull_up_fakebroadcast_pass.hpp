@@ -10,7 +10,7 @@
 namespace ngraph {
 namespace pass {
 
-class TRANSFORMATIONS_API PullUpBroadcastsPass : public ngraph::pass::FunctionPass {
+class TRANSFORMATIONS_API PullUpBroadcastsPass : public FunctionPass {
 public:
     PullUpBroadcastsPass() : FunctionPass() {
         set_property(PassProperty::REQUIRE_STATIC_SHAPE, true);

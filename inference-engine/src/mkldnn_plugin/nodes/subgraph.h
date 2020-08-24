@@ -33,9 +33,9 @@ public:
 
 private:
     // store it here since MKLDNN eraces CNNLayers at some point
-    std::shared_ptr<ngraph::Node> snippet;
+    std::shared_ptr<ngraph::op::Subgraph> snippet;
     // store original snippet node for fallback and regression testing
-    std::shared_ptr<ngraph::Node> snippet_ref;
+    std::shared_ptr<ngraph::op::Subgraph> snippet_ref;
 
     // FIXME: Disable this for POC
     bool letMeSupportDynamicBatch() const {return false;}

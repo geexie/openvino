@@ -1,6 +1,8 @@
 // Copyright (C) 2020 Intel Corporation
 // SPDX-License-Identifier: Apache-2.0
 //
+
+// FIXME: remove or fix?
 #if 0
 #include "transformations/snippets/detect_broadcast_pass.hpp"
 #include "ngraph_ops/load.hpp"
