@@ -65,7 +65,7 @@ private:
     code ptr {nullptr};
 };
 
-std::ostream& operator<<(std::ostream& os, const op::Subgraph::BlockedShape& blocked_shape) {
+static inline std::ostream& operator<<(std::ostream& os, const op::Subgraph::BlockedShape& blocked_shape) {
     os << std::get<0>(blocked_shape) << " " << std::get<1>(blocked_shape) << " " << std::get<2>(blocked_shape);
     return os;
 }
