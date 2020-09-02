@@ -275,8 +275,17 @@ void CPUGenerator::emit(std::shared_ptr<opset1::Power>& op, RegInfo& registers) 
             h->uni_vpslld(vmm_dst, vmm_dst, 25);
             h->uni_vpsrld(vmm_dst, vmm_dst, 2);
             h->uni_vdivps(vmm_dst, vmm_dst, vmm_src);
+        } else if (order == 2.0f) {
+            h->uni_vmulps(vmm_dst, vmm_src, vmm_src);
+        } else if (order == 0.5f) {
+            h->uni_vsqrtps(vmm_dst, vmm_src);
+        } else if (order == -1.0f) {
+            h->uni_vpcmpeqd(vmm_dst, vmm_dst, vmm_dst);
+            h->uni_vpslld(vmm_dst, vmm_dst, 25);
+            h->uni_vpsrld(vmm_dst, vmm_dst, 2);
+            h->uni_vdivps(vmm_dst, vmm_dst, vmm_src);
         } else {
-            throw ngraph_error("unsupported power value");
+            throw ngraph_error("unsupported power value " + std::to_string(order));
         }
     } else {
         throw ngraph_error("unsupported non scalar power");
