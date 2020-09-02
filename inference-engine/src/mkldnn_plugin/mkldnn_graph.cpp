@@ -53,11 +53,11 @@
 // #define BLOB_DUMP_PATH "/Users/mkolpako/bench-08-01-2020/large/regression/snippets"
 // #define BLOB_DUMP_PATH "/Users/mkolpako/bench-08-01-2020/small/regression/snippets"
 
-// #define BLOB_DUMP_PATH "/Users/mkolpako/bench-08-01-2020/"
+#define BLOB_DUMP_PATH "/Users/mkolpako/bench-08-01-2020/"
 //  #define PRINT_GRAPH_INFO
 //  #define DUMP_AS_TEXT
  //#define DUMP_INTERNAL_BLOBS
-// #define CHECK_REFERENCE
+#define CHECK_REFERENCE
 
 #ifdef BLOB_DUMP_PATH
 #   define DUMP_DIR        BLOB_DUMP_PATH
@@ -350,8 +350,8 @@ void MKLDNNGraph::InitGraph() {
     std::cout << "SortTopologically" << std::endl;
     InitNodes();
     std::cout << "InitNodes" << std::endl;
-    // #define BENCHMARK_BARE
-    #if defined(BENCHMARK_BARE)
+    #define SNIPPETS_BENCMARK_UNFUSED
+    #if defined(SNIPPETS_BENCMARK_UNFUSED)
     // benchmark agains what comes after legacy conversion
     #else
     optimizer.ApplyCommonGraphOptimizations(*this);
@@ -1306,10 +1306,10 @@ void MKLDNNGraph::do_before(const std::string &dir, const MKLDNNNodePtr &node) {
         }
 
         if ("out_output_s_in0.ieb" == file_name) {
-            ref_file += "/#955_out_output_s_in0.ieb";
+            ref_file += "/#1099_out_output_s_in0.ieb";
         }
         if ("out_output_e_in0.ieb" == file_name) {
-            ref_file += "/#958_out_output_e_in0.ieb";
+            ref_file += "/#1102_out_output_e_in0.ieb";
         }
 
         if ("out_3171_in0.ieb" == file_name) {
@@ -1341,11 +1341,13 @@ void MKLDNNGraph::do_before(const std::string &dir, const MKLDNNNodePtr &node) {
         const float* ref = refBlob->cbuffer().as<float*>();
         const float* act = prEdge->getBlob()->cbuffer().as<float*>();
 
+        // only bert small requires close check
+
         for (int k = 0; k < prEdge->getBlob()->size(); k++) {
             std::cout << i << ": " << k << ": " << ref[k] << " " << act[k] << " " << std::abs(ref[k]-act[k]) << std::endl;
-            if (std::abs(ref[k]-act[k]) > /*1e-3*/6e-6 || std::isnan(ref[k]) != std::isnan(act[k])) {
+            if (std::abs(ref[k]-act[k]) > 6e-6/*3e-4*/ || std::isnan(ref[k]) != std::isnan(act[k])) {
                 // std::cout << i << ": " << k << ": " << ref[k] << " " << act[k] << " " << std::abs(ref[k]-act[k]) << std::endl;
-                THROW_IE_EXCEPTION << ref[i] << " " << act[i] << " " << std::abs(ref[i]-act[i]);
+                THROW_IE_EXCEPTION << ref[k] << " " << act[k] << " " << std::abs(ref[k]-act[k]);
             }
         }
 
