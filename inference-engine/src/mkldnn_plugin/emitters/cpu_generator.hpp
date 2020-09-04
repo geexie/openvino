@@ -73,6 +73,8 @@ public:
     void emit(std::shared_ptr<opset1::Power>& op, RegInfo& registers) const override;
 
     void emit(std::shared_ptr<opset1::Broadcast>& broadcast, RegInfo& registers) const override;
+    void emit(std::shared_ptr<opset1::PRelu>& op, RegInfo& registers) const override;
+    void emit(std::shared_ptr<opset1::Tanh>& op, RegInfo& registers) const override;
 
     void emit_table(std::shared_ptr<opset1::Constant>& constant) const override;
     void emit_table(std::shared_ptr<opset1::Erf>& op) const override;

@@ -72,6 +72,9 @@ public:
     virtual void emit(std::shared_ptr<opset1::SquaredDifference>& op, RegInfo& registers) const = 0;
     virtual void emit(std::shared_ptr<opset1::Power>& op, RegInfo& registers) const = 0;
 
+    virtual void emit(std::shared_ptr<opset1::PRelu>& op, RegInfo& registers) const = 0;
+    virtual void emit(std::shared_ptr<opset1::Tanh>& op, RegInfo& registers) const = 0;
+
     // FixMe: exclude from opset
     virtual void emit(std::shared_ptr<opset1::Broadcast>& broadcast, RegInfo& registers) const = 0;
 

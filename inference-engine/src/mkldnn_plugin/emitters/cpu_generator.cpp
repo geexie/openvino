@@ -292,7 +292,7 @@ void CPUGenerator::emit(std::shared_ptr<opset1::Power>& op, RegInfo& registers) 
 }
 
 void CPUGenerator::emit(std::shared_ptr<opset1::Sigmoid>& op, RegInfo& registers) const {
-    remark(11) << "  -> sigmoid" << std::endl;
+    remark(1) << "  -> sigmoid" << std::endl;
     // auto x = as_type_ptr<Node>(op);
     auto x = std::dynamic_pointer_cast<Node>(op);
     auto tbl_offset = getTableOffset(x);
@@ -371,7 +371,7 @@ void CPUGenerator::emit(std::shared_ptr<opset1::Sigmoid>& op, RegInfo& registers
     h->uni_vblendvps(vmm_aux2, vmm_aux2, vmm_src, vmm_mask);
     h->uni_vmovups(vmm_mask, vmm_aux2);
 
-    remark(11) << "    -> " << registers.second[0] << " = sigmoid (" << registers.first[0] << ")" << std::endl;
+    remark(1) << "    -> " << registers.second[0] << " = sigmoid (" << registers.first[0] << ")" << std::endl;
 }
 
 // FixMe: It should be Scalar instead!!
@@ -470,6 +470,30 @@ void CPUGenerator::emit(std::shared_ptr<opset1::Erf>& op, RegInfo& registers) co
 
     remark(1) << "Free registers " << latest - regIDx + 1 << std::endl;
     remark(1) << "    -> " << registers.second[0] << " = erf (" << registers.first[0] << ")" << std::endl;
+}
+
+void CPUGenerator::emit(std::shared_ptr<opset1::PRelu>& op, RegInfo& registers) const {
+    remark(1) << "  -> prelu " << std::endl;
+
+    Xbyak::Ymm vmm_src = Xbyak::Ymm(registers.first[0]);
+    Xbyak::Ymm vmm_dst  = Xbyak::Ymm(registers.second[0]);
+
+    // FIXME: add suppport
+    h->uni_vmovups(vmm_dst, vmm_src);
+
+    remark(1) << "    -> " << registers.second[0] << " = prelu (" << registers.first[0] << ")" << std::endl;
+}
+
+void CPUGenerator::emit(std::shared_ptr<opset1::Tanh>& op, RegInfo& registers) const {
+    remark(1) << "  -> tanh " << std::endl;
+
+    Xbyak::Ymm vmm_src = Xbyak::Ymm(registers.first[0]);
+    Xbyak::Ymm vmm_dst  = Xbyak::Ymm(registers.second[0]);
+
+    // FIXME: add suppport
+    h->uni_vmovups(vmm_dst, vmm_src);
+
+    remark(1) << "    -> " << registers.second[0] << " = tanh (" << registers.first[0] << ")" << std::endl;
 }
 
 void CPUGenerator::emit(std::shared_ptr<op::FakeBroadcast>& broadcast, RegInfo& registers) const {
