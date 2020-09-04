@@ -349,7 +349,7 @@ void MKLDNNPlugin::MKLDNNSnippetNode::createPrimitive() {
 }
 
 void MKLDNNPlugin::MKLDNNSnippetNode::execute(mkldnn::stream strm) {
-    if (auto subgraph = ngraph::as_type_ptr<ngraph::op::Subgraph>(snippet)) {
+    if (auto subgraph = ngraph::as_type_ptr<ngraph::op::Subgraph>(snippet_ref)) {
         ngraph::HostTensorVector inputs;
 #if 1
         for (size_t i = 0; i < inDims.size(); i++) {

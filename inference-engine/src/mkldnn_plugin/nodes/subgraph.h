@@ -42,7 +42,8 @@ private:
 
     std::vector<mkldnn::memory::format> getSupportedFormats() const {
         return {
-            mkldnn::memory::nChw8c,
+            // disable if run reference
+            // mkldnn::memory::nChw8c,
             mkldnn::memory::nchw//,
             // mkldnn::memory::nCdhw8c,
             // mkldnn::memory::ncdhw,
@@ -51,7 +52,7 @@ private:
     }
 
     bool useReference() const {
-        return false;
+        return true;
     }
 
     bool runComparisonToReference() const {

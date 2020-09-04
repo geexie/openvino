@@ -53,11 +53,11 @@
 // #define BLOB_DUMP_PATH "/Users/mkolpako/bench-08-01-2020/large/regression/snippets"
 // #define BLOB_DUMP_PATH "/Users/mkolpako/bench-08-01-2020/small/regression/snippets"
 
-#define BLOB_DUMP_PATH "/Users/mkolpako/bench-08-01-2020/"
+// #define BLOB_DUMP_PATH "/Users/mkolpako/bench-08-01-2020/"
 //  #define PRINT_GRAPH_INFO
 //  #define DUMP_AS_TEXT
  //#define DUMP_INTERNAL_BLOBS
-#define CHECK_REFERENCE
+// #define CHECK_REFERENCE
 
 #ifdef BLOB_DUMP_PATH
 #   define DUMP_DIR        BLOB_DUMP_PATH
@@ -1224,6 +1224,7 @@ void MKLDNNGraph::do_before(const std::string &dir, const MKLDNNNodePtr &node) {
     std::replace(nodeName.begin(), nodeName.end(), ' ', '_');
     std::replace(nodeName.begin(), nodeName.end(), ':', '-');
 
+    float accuracy_threshold = 6e-6;
     std::string specific_dir = dir;
     if (_name == "mobilenet-v3-large-1.0-224") {
         specific_dir += "/mobilenet/regression/snippets";
@@ -1247,10 +1248,12 @@ void MKLDNNGraph::do_before(const std::string &dir, const MKLDNNNodePtr &node) {
 
     if (_name == "bert-large-uncased-whole-word-masking-squad-fp32-0001") {
         specific_dir += "/large/regression/snippets";
+        accuracy_threshold = 3e-4;
     }
 
     if (_name == "bert-small-uncased-whole-word-masking-squad-0001") {
         specific_dir += "/small/regression/snippets";
+        accuracy_threshold = 3e-4;
     }
 
 // #define BLOB_DUMP_PATH "/Users/mkolpako/bench-08-01-2020/mobilenet/regression/snippets"
@@ -1341,17 +1344,17 @@ void MKLDNNGraph::do_before(const std::string &dir, const MKLDNNNodePtr &node) {
         const float* ref = refBlob->cbuffer().as<float*>();
         const float* act = prEdge->getBlob()->cbuffer().as<float*>();
 
-        // only bert small requires close check
+        if (refBlob->byteSize() != prEdge->getBlob()->byteSize()) {
+            THROW_IE_EXCEPTION << "blob size = " << refBlob->byteSize() << " while actual " <<prEdge->getBlob()->byteSize();
+        }
 
         for (int k = 0; k < prEdge->getBlob()->size(); k++) {
-            std::cout << i << ": " << k << ": " << ref[k] << " " << act[k] << " " << std::abs(ref[k]-act[k]) << std::endl;
-            if (std::abs(ref[k]-act[k]) > 6e-6/*3e-4*/ || std::isnan(ref[k]) != std::isnan(act[k])) {
-                // std::cout << i << ": " << k << ": " << ref[k] << " " << act[k] << " " << std::abs(ref[k]-act[k]) << std::endl;
+            // std::cout << i << ": " << k << ": " << ref[k] << " " << act[k] << " " << std::abs(ref[k]-act[k]) << std::endl;
+            if (std::abs(ref[k]-act[k]) > accuracy_threshold || std::isnan(ref[k]) != std::isnan(act[k])) {
+                std::cout << i << ": " << k << ": " << ref[k] << " " << act[k] << " " << std::abs(ref[k]-act[k]) << std::endl;
                 THROW_IE_EXCEPTION << ref[k] << " " << act[k] << " " << std::abs(ref[k]-act[k]);
             }
         }
-
-        std::cout << "overall topology accuracy is OK " << dump_file << std::endl;
 #endif
         if (pr->ext_scales) dumper.withScales(pr->ext_scales);
 #ifdef DUMP_AS_TEXT
@@ -1360,6 +1363,8 @@ void MKLDNNGraph::do_before(const std::string &dir, const MKLDNNNodePtr &node) {
         dumper.dump(dump_file);
 #endif
     }
+
+    // THROW_IE_EXCEPTION << "enough";
 
 #ifdef DUMP_INTERNAL_BLOBS
     for (size_t i = 0; i < node->internalBlobs.size(); i++) {
