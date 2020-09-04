@@ -11,6 +11,7 @@
 #include <cassert>
 #include <queue>
 #include <string>
+#include <numeric>
 
 #include <ngraph/opsets/opset1.hpp>
 #include <ngraph/rt_info.hpp>
@@ -35,111 +36,11 @@
 /// Input subgraph is prefented from visiting twice if more than one output of it consumed by currently considered node
 /// New subgraph is introduced, if there is a loop introduced
 /// New subgraph is introduced, if number of inputs and outputs exceeds 7 due to scheduling limitation
+/// New subgraph is introduced, if multiple outputs of merged nodes are not broadcastable to each other (equality of all outputs is too much on the other hand)
 /// Scalar constants are placed as is into subgraph due to optimization purpose
-///
-/// FIXME: There is no check to test that multiple outputs can be actually scheduled together.
-/// If outputs are not broadcastable to each other, subgraph should not be merged and new subgraph should be introduced,
-/// equality of all outputs is on too strict the other hand
 ///
 /// FIXME: other propertie except data dependencies are not transferred does it mean that if we don't do this it wont be an effect on original graph?
 /// ====================================================================================================================================================
-
-auto has_path_from_to(ngraph::Node* from, ngraph::Node* to) -> bool {
-    std::unordered_set<ngraph::Node*> visited;
-    std::queue<ngraph::Node*> stack;
-    stack.push(from);
-
-    while (stack.size() > 0) {
-        ngraph::Node* curr = stack.front();
-        visited.insert(curr);
-
-        if (ngraph::op::is_output(curr)) {
-            return false;
-        }
-
-        stack.pop();
-
-        if (curr != to) {
-            for (const auto& next : curr->get_users()) {
-                if (visited.count(next.get()) == 0) {
-                    stack.push(next.get());
-                }
-            }
-        } else {
-            remark(3) << "path found over " << visited.size() << " nodes" << std::endl;
-            for (auto& n : visited) {
-                remark(3) << "-> " << n << std::endl;
-            }
-            return true;
-        }
-    }
-
-    return false;
-}
-
-auto is_scalar_constant(const std::shared_ptr<ngraph::Node>& source_output_node) -> bool {
-    return !!ngraph::as_type_ptr<ngraph::opset1::Constant>(source_output_node) &&
-        (source_output_node->get_shape() == ngraph::Shape() || ngraph::shape_size(source_output_node->get_shape()) == 1);
-};
-
-auto create_body(std::string name, const ngraph::ResultVector& results, const ngraph::ParameterVector& parameters) -> std::shared_ptr<ngraph::Function> {
-    auto body = std::make_shared<ngraph::Function>(results, parameters);
-    body->set_friendly_name(name);
-    return body;
-};
-
-auto build_subgraph(const std::shared_ptr<ngraph::Node>& node, const ngraph::OutputVector& inputs, const std::shared_ptr<ngraph::Function>& body)
-    -> std::shared_ptr<ngraph::op::Subgraph>{
-    auto subgraph = std::make_shared<ngraph::op::Subgraph>(inputs, body);
-    copy_runtime_info(node, subgraph);
-    subgraph->set_friendly_name(node->get_friendly_name());
-    return subgraph;
-};
-
-auto create_new_subgraph_from(const std::shared_ptr<ngraph::Node>& node) -> std::shared_ptr<ngraph::op::Subgraph> {
-    ngraph::ParameterVector body_parameters;
-    ngraph::OutputVector body_inputs;
-
-    ngraph::OutputVector subgraph_inputs;
-
-    for (auto input : node->inputs()) {
-        auto source_output = input.get_source_output();
-        if (is_scalar_constant(source_output.get_node_shared_ptr())) {
-            body_inputs.push_back(source_output);
-        } else {
-            auto parameter = std::make_shared<ngraph::opset1::Parameter>(input.get_element_type(), input.get_partial_shape());
-            body_parameters.push_back(parameter);
-            body_inputs.push_back(parameter->output(0));
-
-            subgraph_inputs.push_back(source_output);
-        }
-    }
-
-    auto body_node = node->copy_with_new_inputs(body_inputs);
-
-    if (node->get_output_size() != body_node->get_output_size()) {
-        throw ngraph::ngraph_error("original node outputs size and extracted subgraph node outputs size doesn't much");
-    }
-
-    ngraph::ResultVector body_results;
-    for (auto output : node->outputs()) {
-        body_results.push_back(std::make_shared<ngraph::opset1::Result>(body_node->output(output.get_index())));
-    }
-
-    auto body = create_body(node->get_friendly_name(), body_results, body_parameters);
-    auto subgraph = build_subgraph(node, subgraph_inputs, body);
-
-    if (subgraph->get_output_size() != body->get_results().size()) {
-        throw ngraph::ngraph_error("newly create subgraph doesn't much number of original node results");
-    }
-
-    return subgraph;
-}
-
-auto visualize(const std::shared_ptr<ngraph::Function>& body) -> void {
-    static std::atomic_int32_t qq {0};
-    ngraph::pass::VisualizeTree(std::string("./snippets/subgraph") + std::to_string(qq++) + ".dot").run_on_function(body);
-}
 
 auto print_subgraph(const std::shared_ptr<ngraph::op::Subgraph> subgraph) -> void {
     remark(13) << "subgraph " << subgraph->get_friendly_name() << " "
@@ -165,6 +66,82 @@ auto print_subgraph(const std::shared_ptr<ngraph::op::Subgraph> subgraph) -> voi
 
 auto print_edge(const ngraph::Output<ngraph::Node>& output) -> void {
     remark(13) << "Looking for " << output.get_node_shared_ptr()->get_friendly_name() << " " << output.get_node_shared_ptr() << " " << output << std::endl;
+}
+
+auto outputs_are_not_broadcastable(const std::shared_ptr<ngraph::Node>& node) -> bool {
+    auto outputs = node->outputs();
+    auto find_smallest_output_shape = [](const std::vector<ngraph::Output<ngraph::Node>>& outputs) -> ngraph::Shape {
+        return std::accumulate(std::begin(outputs), std::end(outputs), ngraph::Shape(outputs.begin()->get_shape()),
+            [](ngraph::Shape other_shape, ngraph::Output<ngraph::Node> output){
+                return ngraph::shape_size(output.get_shape()) < ngraph::shape_size(other_shape) ? output.get_shape() : other_shape;
+            });
+    };
+    auto ref_shape = find_smallest_output_shape(outputs);
+
+    auto check_shapes_broadcastable = [ref_shape](const ngraph::Output<ngraph::Node>& output) -> bool {
+        auto other_shape = output.get_shape();
+
+        if (other_shape.size() != ref_shape.size()) {
+            return false;
+        }
+
+        return std::inner_product(std::begin(other_shape), std::end(other_shape), std::begin(ref_shape), true,
+                            std::logical_and<bool>(), [](ngraph::Shape::value_type lsh, ngraph::Shape::value_type rsh){
+                                return rsh == 1 || lsh == rsh;
+                            });
+    };
+
+    return std::find_if_not(std::begin(outputs), std::end(outputs), check_shapes_broadcastable) != std::end(outputs);
+};
+
+auto has_cycles_of_dependencies(const std::vector<std::set<ngraph::Input<ngraph::Node>>>& results,
+                                const std::vector<ngraph::Input<ngraph::Node>>& inputs) -> bool {
+    auto BFS_from_to = [](ngraph::Node* from, ngraph::Node* to) -> bool {
+        std::unordered_set<ngraph::Node*> visited;
+        std::queue<ngraph::Node*> stack;
+        stack.push(from);
+
+        while (stack.size() > 0) {
+            ngraph::Node* curr = stack.front();
+            visited.insert(curr);
+
+            if (ngraph::op::is_output(curr)) {
+                return false;
+            }
+
+            stack.pop();
+
+            if (curr != to) {
+                for (const auto& next : curr->get_users()) {
+                    if (visited.count(next.get()) == 0) {
+                        stack.push(next.get());
+                    }
+                }
+            } else {
+                return true;
+            }
+        }
+        return false;
+    };
+
+    for (auto& result : results) {
+        for (auto& user : result) {
+            for (auto& input : inputs) {
+                auto source = input.get_source_output().get_node();
+                auto containsLoop = BFS_from_to(user.get_node(), source);
+
+                remark(3) <<  "checking path from "
+                        << user.get_node()->get_friendly_name()
+                        << " to " << source->get_friendly_name()
+                        << " resulted in " << containsLoop << std::endl;
+
+                if (containsLoop) {
+                    return true;
+                }
+            }
+        }
+    }
+    return false;
 }
 
 ngraph::pass::CollapseSubgraph::CollapseSubgraph() {
@@ -267,7 +244,7 @@ ngraph::pass::CollapseSubgraph::CollapseSubgraph() {
                 // Result op has a single input
                 internal_inputs.push_back(source_result->input_value(0));
             } else {
-                if (is_scalar_constant(input_node)) {
+                if (op::is_scalar_constant(input_node)) {
                     internal_inputs.push_back(input_node->output(0));
                 } else {
                     external_inputs.push_back(input.get_source_output());
@@ -282,6 +259,9 @@ ngraph::pass::CollapseSubgraph::CollapseSubgraph() {
         remark(3) << "Original node outputs = " << node->get_output_size()
                     << " body node outputs = " << body_node->get_output_size() << std::endl;
 
+        if (node->get_output_size() != body_node->get_output_size()) {
+            throw ngraph_error("original node outputs size and extracted node outputs size doesn't much");
+        }
 
         ResultVector body_results;
         std::vector<std::set<Input<Node>>> subgraph_result_inputs;
@@ -332,80 +312,34 @@ ngraph::pass::CollapseSubgraph::CollapseSubgraph() {
         }
 
         if (body_parameters.size() + body_results.size() > 7) {
-            remark(3) << "new subgraph is created. unable to schedule subgraph with "
-                       << body_parameters.size() << " inputs and "
-                       << body_results.size() << " outputs." << std::endl;
+            remark(3) << "new subgraph is created. Impossible to schedule subgraph with "
+                      << body_parameters.size() << " inputs and " << body_results.size() << " outputs." << std::endl;
 
-            auto single_node_subgraph = create_new_subgraph_from(node);
+            auto single_node_subgraph = op::Subgraph::wrap_node_as_subgraph(node);
             ngraph::replace_node(node, single_node_subgraph);
-
             return true;
         }
 
-        if (node->get_output_size() != body_node->get_output_size()) {
-            throw ngraph_error("original node outputs size and extracted node outputs size doesn't much");
-        }
-
-        auto body = create_body(node->get_friendly_name(), body_results, body_parameters);
-        auto subgraph = build_subgraph(node, external_inputs, body);
+        auto body = op::create_body(node->get_friendly_name(), body_results, body_parameters);
+        auto subgraph = op::build_subgraph(node, external_inputs, body);
 
         if (subgraph->get_output_size() != subgraph_result_inputs.size()) {
             throw ngraph_error("newly create subgraph doesn't much number of results");
         }
 
-        auto outputs_are_not_broadcastable = [](const std::shared_ptr<Node>& node) -> bool {
-            auto outShape = node->output(0).get_shape();
-            for (size_t i = 1; i < node->get_output_size(); ++i) {
-                if (node->output(i).get_shape() != outShape) {
-                    return false;
-                }
-            }
-            return true;
-        };
-
         if (outputs_are_not_broadcastable(subgraph)) {
-            remark(3) << "New subgraph should be created due to outputs of a subgraph not proadcascable." << std::endl;
-            // auto single_node_subgraph = create_new_subgraph_from(node);
-            // single_node_subgraph->validate_and_infer_types();
-            // ngraph::replace_node(node, single_node_subgraph);
-            // return true;
+            remark(3) << "New subgraph is created due to outputs of a subgraph not broadcastable." << std::endl;
+
+            auto single_node_subgraph = op::Subgraph::wrap_node_as_subgraph(node);
+            single_node_subgraph->validate_and_infer_types();
+            ngraph::replace_node(node, single_node_subgraph);
+            return true;
         }
 
-        auto has_cycles_of_dependencies = [](const std::unordered_set<std::shared_ptr<Node>>& input_subgraphs,
-                                             const std::vector<std::set<Input<Node>>>& results, const std::shared_ptr<Node>& node) -> bool {
-            bool containsLoop = false;
-            for (auto& result : results) {
-                for (auto& user : result) {
-                    for (auto& input : node->inputs()) {
-                        auto source = input.get_source_output().get_node();
-                        containsLoop |= has_path_from_to(user.get_node(), source);
-
-                        remark(3) <<  "checking path from "
-                                << user.get_node()->get_friendly_name()
-                                << " to " << source->get_friendly_name()
-                                << " resulted in " << containsLoop << std::endl;
-
-                        if (containsLoop) {
-                            for (auto& input_subgraph : input_subgraphs) {
-                                for (auto& subgraph_input : input_subgraph->inputs()) {
-                                    if (subgraph_input.get_source_output().get_node_shared_ptr() == input.get_source_output().get_node_shared_ptr()) {
-                                        remark(3) << "Found this node among the following subgraph "
-                                                    << input_subgraph->get_friendly_name() << " "
-                                                    << input_subgraph << std::endl;
-                                    }
-                                }
-                            }
-                            return true;
-                        }
-                    }
-                }
-            }
-            return containsLoop;
-        };
-
-        if (has_cycles_of_dependencies(input_subgraphs, subgraph_result_inputs, subgraph)) {
+        if (has_cycles_of_dependencies(subgraph_result_inputs, subgraph->inputs())) {
             remark(3) << "New subgraph is created due to loop dependency introduced by one of input subgraphs." << std::endl;
-            auto single_node_subgraph = create_new_subgraph_from(node);
+
+            auto single_node_subgraph = op::Subgraph::wrap_node_as_subgraph(node);
             single_node_subgraph->validate_and_infer_types();
             ngraph::replace_node(node, single_node_subgraph);
             return true;
@@ -509,7 +443,7 @@ ngraph::pass::CollapseSubgraph::CollapseSubgraph() {
                   << " " << node
                   << " Creating new snippet - no input subgraphs found" << std::endl;
 
-        auto subgraph = create_new_subgraph_from(node);
+        auto subgraph = op::Subgraph::wrap_node_as_subgraph(node);
         ngraph::replace_node(node, subgraph);
 
         remark(3) << "Replacement (new) done for: "

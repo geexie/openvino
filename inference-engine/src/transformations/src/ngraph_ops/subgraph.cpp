@@ -78,8 +78,49 @@ bool op::Subgraph::visit_attributes(AttributeVisitor& visitor) {
     return true;
 }
 
+auto op::Subgraph::wrap_node_as_subgraph(const std::shared_ptr<ngraph::Node>& node) -> std::shared_ptr<ngraph::op::Subgraph> {
+    ngraph::ParameterVector body_parameters;
+    ngraph::OutputVector body_inputs;
+
+    ngraph::OutputVector subgraph_inputs;
+
+    for (auto input : node->inputs()) {
+        auto source_output = input.get_source_output();
+        if (is_scalar_constant(source_output.get_node_shared_ptr())) {
+            body_inputs.push_back(source_output);
+        } else {
+            auto parameter = std::make_shared<ngraph::opset1::Parameter>(input.get_element_type(), input.get_partial_shape());
+            body_parameters.push_back(parameter);
+            body_inputs.push_back(parameter->output(0));
+
+            subgraph_inputs.push_back(source_output);
+        }
+    }
+
+    auto body_node = node->copy_with_new_inputs(body_inputs);
+
+    if (node->get_output_size() != body_node->get_output_size()) {
+        throw ngraph::ngraph_error("original node outputs size and extracted subgraph node outputs size doesn't much");
+    }
+
+    ngraph::ResultVector body_results;
+    for (auto output : node->outputs()) {
+        body_results.push_back(std::make_shared<ngraph::opset1::Result>(body_node->output(output.get_index())));
+    }
+
+    auto body = create_body(node->get_friendly_name(), body_results, body_parameters);
+    auto subgraph = build_subgraph(node, subgraph_inputs, body);
+
+    if (subgraph->get_output_size() != body->get_results().size()) {
+        throw ngraph::ngraph_error("newly create subgraph doesn't much number of original node results");
+    }
+
+    return subgraph;
+}
+
 bool op::Subgraph::generate(const BlockedShapeVector& output_shapes, const BlockedShapeVector& input_shapes) {
     remark(0) << "calling autogen" << std::endl;
+
 
     // canonization
     for (auto& shape : input_shapes) {
