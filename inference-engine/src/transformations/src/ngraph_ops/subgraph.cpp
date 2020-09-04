@@ -110,7 +110,7 @@ bool op::Subgraph::generate(const BlockedShapeVector& output_shapes, const Block
             std::vector<size_t> shape(4, 1);
             std::copy(param->get_shape().begin(), param->get_shape().end(), &shape.at(4 - param->get_shape().size()) );
 
-            remark(11) << "parameter" << i << " shape " << param->get_shape() << " reshaping to " << ngraph::Shape(shape) << std::endl;
+            remark(1) << "parameter" << i << " shape " << param->get_shape() << " reshaping to " << ngraph::Shape(shape) << std::endl;
 
             m_body->replace_parameter(i, std::make_shared<opset1::Parameter>(param->get_element_type(), ngraph::Shape(shape)));
         } else if (param->get_shape().size() >= 4) {
@@ -120,7 +120,7 @@ bool op::Subgraph::generate(const BlockedShapeVector& output_shapes, const Block
             }
 
             m_body->replace_parameter(i, std::make_shared<opset1::Parameter>(std::get<2>(input_shapes[i]), std::get<0>(input_shapes[i])));
-            remark(11) << "parameter" << i << " shape " << param->get_shape() << " reshaping to " << std::get<0>(input_shapes[i]) << std::endl;
+            remark(1) << "parameter" << i << " shape " << param->get_shape() << " reshaping to " << std::get<0>(input_shapes[i]) << std::endl;
         }
     }
 
