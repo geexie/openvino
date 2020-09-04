@@ -50,6 +50,10 @@ MKLDNNGraphOptimizer::MKLDNNGraphOptimizer() {}
 void MKLDNNGraphOptimizer::ApplyCommonGraphOptimizations(MKLDNNGraph &graph) {
     OV_ITT_SCOPED_TASK(itt::domains::MKLDNN_LT, "MKLDNNGraphOptimizer::ApplyCommonGraphOptimizations");
 
+#if defined (MKLDNN_GENERIC_POST_OP)
+    MergeSupportAndLayoutOblivious(graph);
+    graph.RemoveDroppedNodes();
+#endif
     MergeTwoEqualScaleShifts(graph);
     graph.RemoveDroppedNodes();
 
@@ -163,6 +167,44 @@ void MKLDNNGraphOptimizer::ApplyImplSpecificGraphOptimizations(MKLDNNGraph &grap
     graph.RemoveDroppedNodes();
 
     graph.RemoveDroppedEdges();
+}
+
+void MKLDNNGraphOptimizer::MergeSupportAndLayoutOblivious(MKLDNNGraph& graph) {
+    // Supported fusions:
+    // Convolution + Snippet
+    // Bin Convolution + Snippet
+    // Fully Connected + Snippet
+    // MVN + Snippet
+    // Resample + Snippet
+    // Batch norm + Snippet
+    // Pooling + Snippet
+    // Normalize + Snippet
+    // conditions:
+    // not an output node?
+    auto isSutableSupportOp = [](MKLDNNNodePtr node) -> bool{
+        return dynamic_cast<MKLDNNConvolutionNode*>(node.get()) != nullptr
+            || node->getType() == BatchNormalization;
+    };
+
+    // Supported cases:
+    // 1. bypass subgraph: no side edges, inplace in-out
+    // 1. not an output node, it cannot be removed from topology
+    auto isSutableLayoutOblivious = [](MKLDNNNodePtr node) -> bool {
+        return false;
+    };
+
+    auto formPostOp = [](MKLDNNNodePtr sup, MKLDNNNodePtr lo) {
+    };
+
+    for (auto node : graph.GetNodes()) {
+        if (isSutableSupportOp(node)) {
+            auto childEdge = node->getChildEdgeAt(0);
+            auto child = childEdge->getChild();
+            if (isSutableLayoutOblivious(child)) {
+                formPostOp(node, child);
+            }
+        }
+    }
 }
 
 void MKLDNNGraphOptimizer::MergeConversions(MKLDNNGraph& graph) {
