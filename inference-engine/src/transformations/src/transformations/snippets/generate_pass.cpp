@@ -92,6 +92,10 @@ bool ngraph::pass::GenerateCodePass::run_on_function(std::shared_ptr<Function> f
             m_generator->emit(op, regs);
         } else if (auto op = std::dynamic_pointer_cast<opset1::Erf>(n)) {
             m_generator->emit(op, regs);
+        } else if (auto op = std::dynamic_pointer_cast<opset1::PRelu>(n)) {
+            m_generator->emit(op, regs);
+        } else if (auto op = std::dynamic_pointer_cast<opset1::Tanh>(n)) {
+            m_generator->emit(op, regs);
         } else if (auto op = std::dynamic_pointer_cast<op::FakeBroadcast>(n)) {
             m_generator->emit(op, regs);
         } else if (auto op = std::dynamic_pointer_cast<op::Scalar>(n)) {
@@ -114,7 +118,8 @@ bool ngraph::pass::GenerateCodePass::run_on_function(std::shared_ptr<Function> f
         } else if (auto op = std::dynamic_pointer_cast<opset1::Sigmoid>(n)) {
             m_generator->emit(op, regs);
         } else {
-            throw ngraph::ngraph_error(std::string("unknown operation ") + n->get_type_info().name);
+            std::cout << "Warning " << std::string("unknown operation ") << n->get_type_info().name << std::endl;
+            // throw ngraph::ngraph_error(std::string("unknown operation ") + n->get_type_info().name);
         }
     }
 
