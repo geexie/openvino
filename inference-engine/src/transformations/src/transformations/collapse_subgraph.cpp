@@ -144,7 +144,7 @@ auto has_cycles_of_dependencies(const std::vector<std::set<ngraph::Input<ngraph:
     return false;
 }
 
-ngraph::pass::CollapseSubgraph::CollapseSubgraph() {
+ngraph::pass::CollapseSubgraph::CollapseSubgraph(bool tokenize_by_node) : GraphRewrite() {
     ngraph::graph_rewrite_callback continuation_callback = [](ngraph::pattern::Matcher &m) -> bool {
         auto node = m.get_match_root();
 
@@ -213,7 +213,7 @@ ngraph::pass::CollapseSubgraph::CollapseSubgraph() {
                             remark(3) << "replacing " << *found << " " << current_input_index << " with " << body_parameters[current_input_index] << std::endl;
                             f->replace_parameter(i, body_parameters[current_input_index]);
                         } else if (is_recurrent(subgraph->input_value(i))) {
-                            remark(3) << "recurrence is detected to be handled later " << subgraph->input_value(i).get_node_shared_ptr() << std::endl;
+                            remark(3) << "ternary merge is conducted " << subgraph->input_value(i).get_node_shared_ptr() << std::endl;
 
                             auto internal = input_body_parameters[i];
                             auto internal_consumers = internal->outputs();
@@ -268,28 +268,22 @@ ngraph::pass::CollapseSubgraph::CollapseSubgraph() {
 
         for (auto subgraph : input_subgraphs) {
             for (auto output : subgraph->outputs()) {
-                bool has_side_consumers = false;
+                bool first_side_consumer = true;
 
                 for (auto target_input : output.get_target_inputs()) {
-                    // Check if target_input is in a list of considered nodes (all sub-graphs and the node)
-                    // suppose there is a consumer TODO: need to worry?
                     auto target_node = target_input.get_node()->shared_from_this();
 
-                    if (input_subgraphs.count(target_node) && (subgraph != target_node) && (target_node != node)) {
-                        std::cout << "WE ARE FOUND RECURRENCE AGAIN "
-                            << target_input.get_source_output().get_node_shared_ptr()
-                            << " vs " << target_node << " vs " << subgraph << std::endl;
+                    if (input_subgraphs.count(target_node)) {
+                        remark(3) << "ternary merge is conducted " << subgraph << " -> " << target_node << std::endl;
                     }
 
-                    bool is_side_consumer = !input_subgraphs.count(target_node) && target_node != node;
-                    if (is_side_consumer) {
-                        if (!has_side_consumers) {
+                    if (!input_subgraphs.count(target_node) && target_node != node) {
+                        if (first_side_consumer) {
                             auto& input_subgraph_body = clones[subgraph];
-                            // Create a new Result op node inside the body
-                            // TODO: what about reuse the existing Result op nodes in subgraphs as it is done for Parameters?
                             body_results.push_back(std::make_shared<opset1::Result>(input_subgraph_body->get_results()[output.get_index()]->input_value(0)));
-                            subgraph_result_inputs.push_back({}); // create empty set if inputs
-                            has_side_consumers = true;
+                            subgraph_result_inputs.push_back({});
+
+                            first_side_consumer = false;
                         }
 
                         if (!!subgraph_result_inputs.back().count(target_input)) {
@@ -431,8 +425,8 @@ ngraph::pass::CollapseSubgraph::CollapseSubgraph() {
 
     this->add_matcher(std::make_shared<pattern::Matcher>(
         std::make_shared<pattern::op::Label>(pattern::any_input(),
-        [hasSomeSubgraphInput, is_lo](std::shared_ptr<Node> n) {
-            return is_lo(n) && !hasSomeSubgraphInput(n);
+        [hasSomeSubgraphInput, is_lo, tokenize_by_node](std::shared_ptr<Node> n) {
+            return is_lo(n) && (tokenize_by_node || !hasSomeSubgraphInput(n));
         }),
         "CollapseSubgraphNew"),
         [](ngraph::pattern::Matcher &m) -> bool {

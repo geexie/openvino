@@ -15,7 +15,7 @@ namespace pass {
 
 class TRANSFORMATIONS_API CollapseSubgraph: public ngraph::pass::GraphRewrite {
 public:
-    CollapseSubgraph();
+    explicit CollapseSubgraph(bool tokenize_by_node = false);
 };
 
 }  // namespace pass
