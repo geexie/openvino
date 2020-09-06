@@ -11,6 +11,8 @@
 
 #include <ngraph/pass/graph_rewrite.hpp>
 
+#define TOKENIZE_SNIPPETS
+
 
 namespace ngraph {
 namespace pass {

@@ -55,7 +55,12 @@
 #include <transformations/convert_precision.hpp>
 #include <transformations/init_node_info.hpp>
 #include <transformations/rt_info/fused_names_attribute.hpp>
+<<<<<<< HEAD
 
+=======
+#include <transformations/tensor_iterator_transformations/apply_transformations_to_ti_body.hpp>
+#include <transformations/collapse_subgraph.hpp>
+>>>>>>> 0b395d8ca... [SS] cover quantized topologies as well
 #include <ngraph/opsets/opset2.hpp>
 #include <ngraph/opsets/opset3.hpp>
 #include <ngraph/opsets/opset4.hpp>
@@ -223,6 +228,9 @@ static void Transformation(ICNNNetwork::Ptr& clonedNetwork, const Config& conf) 
         transformer.transform(nGraphFunc);
     }
 
+#if defined(TOKENIZE_SNIPPETS)
+    manager.register_pass<ngraph::pass::CollapseSubgraph>();
+#endif
     ngraph::pass::Manager legacyManager;
     legacyManager.register_pass<ngraph::pass::ConvertOpSet1ToLegacy>();
     legacyManager.register_pass<ngraph::pass::ConvertPrecision>(ngraph::element::i64, ngraph::element::i32);
