@@ -41,33 +41,6 @@
 ///
 /// FIXME: other propertie except data dependencies are not transferred does it mean that if we don't do this it wont be an effect on original graph?
 /// ====================================================================================================================================================
-
-auto print_subgraph(const std::shared_ptr<ngraph::op::Subgraph> subgraph) -> void {
-    remark(13) << "subgraph " << subgraph->get_friendly_name() << " "
-        << subgraph->get_type_name()
-        << " which contains " << subgraph->get_body()->get_ops().size() << " nodes" << std::endl;
-
-    for (auto& node : subgraph->get_body()->get_ops()) {
-        remark(13) << "  " << node->get_friendly_name() << " (" << node->get_type_name() << ")" << std::endl;
-    }
-
-    for (auto& in : subgraph->inputs()) {
-        remark(13) << "  -> " << in.get_source_output().get_node_shared_ptr()->get_friendly_name() << " "
-            << in.get_source_output().get_node_shared_ptr() << std::endl;
-    }
-
-    for (auto& out : subgraph->outputs()) {
-        for (auto& user : out.get_target_inputs()) {
-            remark(13) << " <- " << user.get_node()->get_friendly_name() << " "  << user.get_node() << std::endl;
-        }
-        remark(13) << std::endl;
-    }
-}
-
-auto print_edge(const ngraph::Output<ngraph::Node>& output) -> void {
-    remark(13) << "Looking for " << output.get_node_shared_ptr()->get_friendly_name() << " " << output.get_node_shared_ptr() << " " << output << std::endl;
-}
-
 auto outputs_are_not_broadcastable(const std::shared_ptr<ngraph::Node>& node) -> bool {
     auto outputs = node->outputs();
     auto find_smallest_output_shape = [](const std::vector<ngraph::Output<ngraph::Node>>& outputs) -> ngraph::Shape {
@@ -196,7 +169,7 @@ ngraph::pass::CollapseSubgraph::CollapseSubgraph(bool tokenize_by_node) : GraphR
             auto input_node = input.get_source_output().get_node_shared_ptr();
 
             if (auto subgraph = as_type_ptr<ngraph::op::Subgraph>(input_node)) {
-                // print_subgraph(subgraph);
+                // subgraph->print();
 
                 if (!input_subgraphs.count(input_node)) {
                     input_subgraphs.insert(input_node);
@@ -205,8 +178,6 @@ ngraph::pass::CollapseSubgraph::CollapseSubgraph(bool tokenize_by_node) : GraphR
                     const auto& input_body_parameters = f->get_parameters();
 
                     for (size_t i = 0; i < input_body_parameters.size(); ++i) {
-                        // print_edge(subgraph->input_value(i));
-
                         auto found = std::find(external_inputs.begin(), external_inputs.end(), subgraph->input_value(i));
                         if (found != external_inputs.end()) {
                             auto current_input_index = get_input_index(*found);
@@ -352,7 +323,7 @@ ngraph::pass::CollapseSubgraph::CollapseSubgraph(bool tokenize_by_node) : GraphR
                     << " inputs and " << subgraph->outputs().size()
                     << " outputs and " << subgraph->get_body()->get_ops().size() << " ops total\n";
 
-        // print_subgraph(subgraph);
+        // subgraph->print();
         return true;
     };
 

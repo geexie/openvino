@@ -118,8 +118,18 @@ auto op::Subgraph::wrap_node_as_subgraph(const std::shared_ptr<ngraph::Node>& no
     return subgraph;
 }
 
+// We also can think of canonization as of pass to copy original subgraph and transforming it to canonical form suitable for code generation
+// pass actual parameters and results shapes to generate for as well as channel mapping,
+// we need to distinguish between 5d tensors that represents <N, C, H, W, c> and <N, C, D, H, W> somehow like locked dimensions
+// ngraph::AxisVector to code
+//
+// Dunamic dimension like <N, C, H, W> = <?, ?, ?, ?> or <N, C, H, W> = <?, ?, ?, W> means that we can merge the consecutive and linearise
+// <N, C, H, W> = <?> or <N, C, H, W> = <?, W> folding consecutive dimensions
 bool op::Subgraph::generate(const BlockedShapeVector& output_shapes, const BlockedShapeVector& input_shapes) {
-    remark(0) << "calling autogen" << std::endl;
+    return false;
+    // FIXME: check if types are compatible, as well for quantized topologies
+    // NODE_VALIDATION_CHECK(this, input_shapes.size() != m_body->get_parameters().size(),
+        // "number of parameters for snippet doesn't much passed to generate method: ", input_shapes.size(), ").");
 
 
     // canonization
@@ -368,6 +378,10 @@ bool op::Subgraph::generate(const BlockedShapeVector& output_shapes, const Block
 }
 
 bool op::Subgraph::evaluate(const HostTensorVector& outputs, const HostTensorVector& inputs) const {
+    if (!m_generator) {
+        std::cout << "We are evaluating " << inputs.size() << " -> " << outputs.size() << std::endl;
+        return m_body->evaluate(outputs, inputs);
+    }
     // return true;
     // std::cout << "We are evaluating " << inputs.size() << " -> " << outputs.size() << std::endl;
 
@@ -636,4 +650,89 @@ bool op::Subgraph::evaluate(const HostTensorVector& outputs, const HostTensorVec
     }
 
     return true;
+}
+
+void ngraph::op::Subgraph::print() const {
+    remark(13) << "subgraph " << this->get_friendly_name() << " "
+        << this->get_type_name()
+        << " which contains " << this->get_body()->get_ops().size() << " nodes" << std::endl;
+
+    int qqq = 0;
+    for (auto op : this->get_body()->get_ordered_ops()) {
+        remark(13) << "op " << qqq++ << " " << op->get_friendly_name() << " (" << op->get_type_name() << ") " << op << std::endl;
+    }
+
+    for (auto& in : this->inputs()) {
+        remark(13) << "  -> " << in.get_source_output().get_node_shared_ptr()->get_friendly_name() << " "
+            << in.get_source_output().get_node_shared_ptr() << std::endl;
+    }
+
+    for (auto& out : this->outputs()) {
+        for (auto& user : out.get_target_inputs()) {
+            remark(13) << " <- " << user.get_node()->get_friendly_name() << " "  << user.get_node() << std::endl;
+        }
+        remark(13) << std::endl;
+    }
+}
+
+void ngraph::op::Subgraph::print_statistics(bool verbose) {
+    auto getNodeInventory = [](std::shared_ptr<ngraph::Node> n) -> size_t {
+        size_t total = 0;
+
+        for (auto input : n->inputs()) {
+            total += input.get_tensor().size();
+        }
+
+        for (auto output : n->outputs()) {
+            total += output.get_tensor().size();
+        }
+
+        if (auto subgraph = ngraph::as_type_ptr<ngraph::op::Subgraph>(n)) {
+            for (auto op : subgraph->get_body()->get_ordered_ops()) {
+                if (ngraph::as_type_ptr<ngraph::opset1::Constant>(op)) {
+                    total += op->output(0).get_tensor().size();
+                }
+            }
+        }
+
+        return total;
+    };
+
+    auto getFunctionInventory = [getNodeInventory](std::shared_ptr<ngraph::Function> f) -> size_t {
+        size_t total = 0;
+        for (auto op : f->get_ordered_ops()) {
+            // Results and parameters are artificially introduced,
+            // while Constants are already considered if they are inputs of other operation
+            // this should lead to 1:1 inventory for single node operations
+            if (!ngraph::as_type_ptr<ngraph::opset1::Parameter>(op)
+             && !ngraph::as_type_ptr<ngraph::opset1::Result>(op)
+             && !ngraph::as_type_ptr<ngraph::opset1::Constant>(op)) {
+                total += getNodeInventory(op);
+            }
+        }
+        return total;
+    };
+
+    auto countConstants = [](std::shared_ptr<ngraph::Function> f) -> size_t {
+        size_t count = 0;
+        for (auto op : f->get_ordered_ops()) {
+            count += !!ngraph::as_type_ptr<ngraph::opset1::Constant>(op) ? 1 : 0;
+        }
+        return count;
+    };
+
+    auto body = this->get_body();
+
+    std::cout << this->get_friendly_name()
+                << ";" << this
+                << ";" << body->get_ops().size()
+                << ";" << body->get_parameters().size()
+                << ";" << body->get_results().size()
+                << ";" << countConstants(body)
+                << ";" << getFunctionInventory(body)
+                << ";" << getNodeInventory(this->shared_from_this()) << std::endl;
+
+    if (verbose) {
+        this->print();
+    }
 }

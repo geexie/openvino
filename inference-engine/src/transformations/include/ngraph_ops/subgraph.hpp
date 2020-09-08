@@ -55,6 +55,9 @@ public:
     // it's going to be replaced with Jitters table later
     void set_generator(std::shared_ptr<Generator> generator);
 
+    void print() const;
+    void print_statistics(bool verbose);
+
     static auto wrap_node_as_subgraph(const std::shared_ptr<ngraph::Node>& node) -> std::shared_ptr<ngraph::op::Subgraph>;
 
 private:

@@ -22,42 +22,20 @@ public:
     void getSupportedDescriptors() override;
     void initSupportedPrimitiveDescriptors() override;
 
-    // Here we jit everything
+    // Here we convert to canonical for & jit everything
     void createPrimitive() override;
 
-    // Here is the check, it seem that every node override it
     bool created() const override;
 
-    // Here we execute
+    // if generator is set, it would execute generated code otherwise it would fallback to nGraph reference
     void execute(mkldnn::stream strm) override;
 
 private:
-    // store it here since MKLDNN eraces CNNLayers at some point
+    // Local copy of subgraph node for canonization & code generation
     std::shared_ptr<ngraph::op::Subgraph> snippet;
-    // store original snippet node for fallback and regression testing
+    // Original subgraph node for fallback and regression testing
+    // store it here since MKLDNN eraces CNNLayers at some point
     std::shared_ptr<ngraph::op::Subgraph> snippet_ref;
-
-    // FIXME: Disable this for POC
-    bool letMeSupportDynamicBatch() const {return false;}
-
-    std::vector<mkldnn::memory::format> getSupportedFormats() const {
-        return {
-            // disable if run reference
-            // mkldnn::memory::nChw8c,
-            mkldnn::memory::nchw//,
-            // mkldnn::memory::nCdhw8c,
-            // mkldnn::memory::ncdhw,
-            // mkldnn::memory::format::any
-        };
-    }
-
-    bool useReference() const {
-        return true;
-    }
-
-    bool runComparisonToReference() const {
-        return false;
-    }
 };
 
 }  // namespace MKLDNNPlugin
