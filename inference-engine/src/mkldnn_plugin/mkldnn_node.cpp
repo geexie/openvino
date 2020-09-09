@@ -270,15 +270,15 @@ MKLDNNNode* MKLDNNNode::CreateNode(const InferenceEngine::CNNLayerPtr& layer, co
     MKLDNNNode *newNode = nullptr;
     auto nodesHolder = GetNodesHolder();
 
-    if (auto node = layer->getNode()) {
-        if (auto subgraph = ngraph::as_type_ptr<ngraph::op::Subgraph>(node)) {
-            std::cerr << "Subgraph found: " << subgraph->get_name() << " (" << subgraph->get_friendly_name() << ")"
-                      << ", body has " << subgraph->get_body()->get_ops().size() << " nodes\n";
-            for (auto op : subgraph->get_body()->get_ops()) {
-                std::cerr << "  " << op->get_friendly_name() << std::endl;
-            }
-        }
-    }
+    // if (auto node = layer->getNode()) {
+    //     if (auto subgraph = ngraph::as_type_ptr<ngraph::op::Subgraph>(node)) {
+    //         std::cerr << "Subgraph found: " << subgraph->get_name() << " (" << subgraph->get_friendly_name() << ")"
+    //                   << ", body has " << subgraph->get_body()->get_ops().size() << " nodes\n";
+    //         for (auto op : subgraph->get_body()->get_ops()) {
+    //             std::cerr << "  " << op->get_friendly_name() << std::endl;
+    //         }
+    //     }
+    // }
 
     if (nodesHolder->nodes.find("Generic") != nodesHolder->nodes.end()) {
         std::unique_ptr<MKLDNNNode> ol(nodesHolder->nodes["Generic"](layer, eng, w_cache));

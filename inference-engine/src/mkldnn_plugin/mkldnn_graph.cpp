@@ -351,12 +351,10 @@ void MKLDNNGraph::InitGraph() {
     InitNodes();
     std::cout << "InitNodes" << std::endl;
     #define SNIPPETS_BENCMARK_UNFUSED
-    #if defined(SNIPPETS_BENCMARK_UNFUSED)
-    // benchmark agains what comes after legacy conversion
-    #else
+    #if !defined(SNIPPETS_BENCMARK_UNFUSED)
     optimizer.ApplyCommonGraphOptimizations(*this);
-    #endif
     std::cout << "ApplyCommonGraphOptimizations" << std::endl;
+    #endif
     SortTopologically();
     std::cout << "SortTopologically" << std::endl;
 
@@ -1226,35 +1224,36 @@ void MKLDNNGraph::do_before(const std::string &dir, const MKLDNNNodePtr &node) {
 
     float accuracy_threshold = 6e-6;
     std::string specific_dir = dir;
+    bool is_reference_available = false;
     if (_name == "mobilenet-v3-large-1.0-224") {
         specific_dir += "/mobilenet/regression/snippets";
-    }
-
-    if (_name == "asl-recognition-0004") {
+        is_reference_available = true;
+    } else if (_name == "asl-recognition-0004") {
         specific_dir += "/asl/regression/snippets";
-    }
-
-    if (_name == "person-reidentification-retail-0270") {
+        is_reference_available = true;
+    } else if (_name == "person-reidentification-retail-0270") {
         specific_dir += "/reid/regression/snippets";
-    }
-
-    if (_name == "person-attributes-recognition-crossroad-0230") {
+        is_reference_available = true;
+    } else if (_name == "person-attributes-recognition-crossroad-0230") {
         specific_dir += "/attrs/regression/snippets";
-    }
-
-    if (_name == "bert-base-uncased") {
+        is_reference_available = true;
+    } else if (_name == "person-attributes-recognition-crossroad-0230-q") {
+        specific_dir += "/attrs-q/regression/snippets";
+        is_reference_available = true;
+    } else if (_name == "bert-base-uncased") {
         specific_dir += "/uncased/regression/snippets";
-    }
-
-    if (_name == "bert-large-uncased-whole-word-masking-squad-fp32-0001") {
+        is_reference_available = true;
+    } else if (_name == "bert-large-uncased-whole-word-masking-squad-fp32-0001") {
         specific_dir += "/large/regression/snippets";
         accuracy_threshold = 3e-4;
-    }
-
-    if (_name == "bert-small-uncased-whole-word-masking-squad-0001") {
+        is_reference_available = true;
+    } else if (_name == "bert-small-uncased-whole-word-masking-squad-0001") {
         specific_dir += "/small/regression/snippets";
         accuracy_threshold = 3e-4;
+        is_reference_available = true;
     }
+
+
 
 // #define BLOB_DUMP_PATH "/Users/mkolpako/bench-08-01-2020/mobilenet/regression/snippets"
 // #define BLOB_DUMP_PATH "/Users/mkolpako/bench-08-01-2020/asl/regression/snippets"
@@ -1287,74 +1286,77 @@ void MKLDNNGraph::do_before(const std::string &dir, const MKLDNNNodePtr &node) {
         BlobDumper dumper(prEdge->getBlob());
 
 #if defined(CHECK_REFERENCE)
-        std::string ref_file = specific_dir.c_str();
-        ref_file.replace(ref_file.find("snippets", 0), std::string("snippets").length(), "ref");
+        if (is_reference_available) {
+            std::string ref_file = specific_dir.c_str();
+            ref_file.replace(ref_file.find("snippets", 0), std::string("snippets").length(), "ref");
 
-        auto tokens = tokenize(ref_file);
+            auto tokens = tokenize(ref_file);
 
-        if (tokens[tokens.size()-3] == "asl") {
-            ref_file += "/#279_out_output_in0.ieb";
-        }
+            if (tokens[tokens.size()-3] == "asl") {
+                ref_file += "/#279_out_output_in0.ieb";
+            }
 
-        if (tokens[tokens.size()-3] == "mobilenet") {
-            ref_file += "/#205_out_logits_in0.ieb";
-        }
+            if (tokens[tokens.size()-3] == "mobilenet") {
+                ref_file += "/#205_out_logits_in0.ieb";
+            }
 
-        if (tokens[tokens.size()-3] == "uncased") {
-            ref_file += "/#727_out_bert_pooler_dense_Tanh_in0.ieb";
-        }
+            if (tokens[tokens.size()-3] == "uncased") {
+                ref_file += "/#727_out_bert_pooler_dense_Tanh_in0.ieb";
+            }
 
-        if (tokens[tokens.size()-3] == "reid") {
-            ref_file += "/#385_out_reid_embedding_in0.ieb";
-        }
+            if (tokens[tokens.size()-3] == "reid") {
+                ref_file += "/#385_out_reid_embedding_in0.ieb";
+            }
 
-        if ("out_output_s_in0.ieb" == file_name) {
-            ref_file += "/#1099_out_output_s_in0.ieb";
-        }
-        if ("out_output_e_in0.ieb" == file_name) {
-            ref_file += "/#1102_out_output_e_in0.ieb";
-        }
+            if ("out_output_s_in0.ieb" == file_name) {
+                ref_file += "/#1099_out_output_s_in0.ieb";
+            }
+            if ("out_output_e_in0.ieb" == file_name) {
+                ref_file += "/#1102_out_output_e_in0.ieb";
+            }
 
-        if ("out_3171_in0.ieb" == file_name) {
-            ref_file += "/#1763_out_3171_in0.ieb";
-        }
-        if ("out_3172_in0.ieb" == file_name) {
-            ref_file += "/#1766_out_3172_in0.ieb";
-        }
+            if ("out_3171_in0.ieb" == file_name) {
+                ref_file += "/#1763_out_3171_in0.ieb";
+            }
+            if ("out_3172_in0.ieb" == file_name) {
+                ref_file += "/#1766_out_3172_in0.ieb";
+            }
 
-        if ("out_453_in0.ieb" == file_name) {
-            ref_file += "/#114_out_453_in0.ieb";
-        }
+            if ("out_453_in0.ieb" == file_name) {
+                ref_file += "/#114_out_453_in0.ieb";
+            }
 
-        if ("out_456_in0.ieb" == file_name) {
-            ref_file += "/#118_out_456_in0.ieb";
-        }
+            if ("out_456_in0.ieb" == file_name) {
+                ref_file += "/#118_out_456_in0.ieb";
+            }
 
-        if ("out_459_in0.ieb" == file_name) {
-            ref_file += "/#122_out_459_in0.ieb";
-        }
+            if ("out_459_in0.ieb" == file_name) {
+                ref_file += "/#122_out_459_in0.ieb";
+            }
 
-        std::cout << this->_name << std::endl;
-        std::cout << ref_file << std::endl;
-        std::cout << file_name << std::endl;
+            std::cout << this->_name << std::endl;
+            std::cout << ref_file << std::endl;
+            std::cout << file_name << std::endl;
 
-        BlobDumper refDumper = BlobDumper::read(ref_file);
+            BlobDumper refDumper = BlobDumper::read(ref_file);
 
-        auto refBlob = refDumper.get();
-        const float* ref = refBlob->cbuffer().as<float*>();
-        const float* act = prEdge->getBlob()->cbuffer().as<float*>();
+            auto refBlob = refDumper.get();
+            const float* ref = refBlob->cbuffer().as<float*>();
+            const float* act = prEdge->getBlob()->cbuffer().as<float*>();
 
-        if (refBlob->byteSize() != prEdge->getBlob()->byteSize()) {
-            THROW_IE_EXCEPTION << "blob size = " << refBlob->byteSize() << " while actual " <<prEdge->getBlob()->byteSize();
-        }
+            if (refBlob->byteSize() != prEdge->getBlob()->byteSize()) {
+                THROW_IE_EXCEPTION << "blob size = " << refBlob->byteSize() << " while actual " <<prEdge->getBlob()->byteSize();
+            }
 
-        for (int k = 0; k < prEdge->getBlob()->size(); k++) {
-            // std::cout << i << ": " << k << ": " << ref[k] << " " << act[k] << " " << std::abs(ref[k]-act[k]) << std::endl;
-            if (std::abs(ref[k]-act[k]) > accuracy_threshold || std::isnan(ref[k]) != std::isnan(act[k])) {
-                std::cout << i << ": " << k << ": " << ref[k] << " " << act[k] << " " << std::abs(ref[k]-act[k]) << std::endl;
-                THROW_IE_EXCEPTION << ref[k] << " " << act[k] << " " << std::abs(ref[k]-act[k]);
+            for (int k = 0; k < prEdge->getBlob()->size(); k++) {
+                // std::cout << i << ": " << k << ": " << ref[k] << " " << act[k] << " " << std::abs(ref[k]-act[k]) << std::endl;
+                if (std::abs(ref[k]-act[k]) > accuracy_threshold || std::isnan(ref[k]) != std::isnan(act[k])) {
+                    std::cout << i << ": " << k << ": " << ref[k] << " " << act[k] << " " << std::abs(ref[k]-act[k]) << std::endl;
+                    THROW_IE_EXCEPTION << ref[k] << " " << act[k] << " " << std::abs(ref[k]-act[k]);
+                }
             }
         }
+        std::cout << "accuracy is ok" << std::endl;
 #endif
         if (pr->ext_scales) dumper.withScales(pr->ext_scales);
 #ifdef DUMP_AS_TEXT
