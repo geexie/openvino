@@ -89,10 +89,10 @@ bool op::BroadcastLoad::evaluate(const HostTensorVector& output_values, const Ho
         }
     }
 
-    // runtime::reference::broadcast<float>((input_values[0]->get_data_ptr<float>()),
-    //                                  (output_values[0]->get_data_ptr<float>()),
-    //                                  input_values[0]->get_shape(),
-    //                                  output_values[0]->get_shape(),
-    //                                  broadcast_axes);
+    runtime::reference::broadcast<float>((input_values[0]->get_data_ptr<float>()),
+                                     (output_values[0]->get_data_ptr<float>()),
+                                     input_values[0]->get_shape(),
+                                     output_values[0]->get_shape(),
+                                     broadcast_axes);
     return true;
 }

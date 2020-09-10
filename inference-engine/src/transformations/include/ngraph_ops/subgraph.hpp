@@ -69,7 +69,7 @@ private:
 
     // bool relax_shapes();
 
-    // bool convert_to_snippet_dialect();
+    void convert_to_snippet_dialect();
 
     std::shared_ptr<Function> m_body;
     std::vector<std::shared_ptr<opset1::Constant>> m_constants;

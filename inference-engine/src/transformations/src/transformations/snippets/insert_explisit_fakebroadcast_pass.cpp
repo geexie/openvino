@@ -41,6 +41,7 @@ static std::shared_ptr<ngraph::Node> numpy_broadcast_node(const ngraph::Output<n
     remark(2) << "Insert explicit broadcast " << value.get_node()->get_type_name()
     << " " << broadcast_axes << " " << broadcasted_node->get_shape() << " -> " << output_shape << std::endl;
 
+    // it shouldn't be a probrem for now since we don't consider StridedSlice and Broadcast here
     if (auto constant = ngraph::as_type_ptr<ngraph::opset1::Constant>(broadcasted_node)) {
         if (constant->get_shape() == ngraph::Shape() || ngraph::shape_size(constant->get_shape()) == 1) {
             remark(2) << "Insert explicit broadcast " << value.get_node()->get_type_name()
@@ -50,8 +51,16 @@ static std::shared_ptr<ngraph::Node> numpy_broadcast_node(const ngraph::Output<n
         }
     }
 
-    // exclude constant for now, but it seems we need more generic approach
-    if (!broadcast_axes.empty() /*&& (ngraph::as_type_ptr<ngraph::opset1::Constant>(broadcasted_node) == nullptr)*/) {
+    if (auto constant = ngraph::as_type_ptr<ngraph::op::Scalar>(broadcasted_node)) {
+        if (constant->get_shape() == ngraph::Shape() || ngraph::shape_size(constant->get_shape()) == 1) {
+            remark(2) << "Insert explicit broadcast " << value.get_node()->get_type_name()
+                       << " to scalar constant " << constant->get_shape() << " -- aborting!" << std::endl;
+
+            return broadcasted_node;
+        }
+    }
+
+    if (!broadcast_axes.empty()) {
         // ShapeOf
         broadcasted_node = std::make_shared<ngraph::op::FakeBroadcast>(broadcasted_node, output_shape);
     }
@@ -96,6 +105,30 @@ std::pair<ngraph::Shape, std::vector<ngraph::Shape>> get_numpy_broadcast_shapes(
     return {target_shape, full_shapes};
 }
 
+auto reset_broacast_config(const std::shared_ptr<ngraph::Node>& op) -> void {
+    using namespace ngraph;
+
+    bool is_scalar = false;
+    for (auto input : op->inputs()) {
+        if (input.get_shape() == Shape() || ngraph::shape_size(input.get_shape()) == 1) {
+            is_scalar = true;
+        }
+    }
+
+    if (!is_scalar) {
+        if (auto binary = std::dynamic_pointer_cast<op::util::BinaryElementwiseArithmetic>(op)) {
+            binary->set_autob(op::AutoBroadcastSpec::NONE);
+        } else if (auto binary = std::dynamic_pointer_cast<op::util::BinaryElementwiseComparison>(op)) {
+            binary->set_autob(op::AutoBroadcastSpec::NONE);
+        } else if (auto binary = std::dynamic_pointer_cast<op::util::BinaryElementwiseLogical>(op)) {
+            binary->set_autob(op::AutoBroadcastSpec::NONE);
+        }
+    }
+}
+
+// adds explicit broadcasts if needed
+// ToDO: this indeed make model not reshapable, need to come up with more clever way to insert fake broadcast,
+// well on the other hand, if we replace scalar constant with Scalar op / or ShapeOf, we could have broadcasts that are reshapable
 ngraph::pass::InsertExplicitFakeBroadcastPass::InsertExplicitFakeBroadcastPass() {
      ngraph::graph_rewrite_callback callback = [this](ngraph::pattern::Matcher &m) {
         auto root = m.get_match_root();
@@ -122,18 +155,16 @@ ngraph::pass::InsertExplicitFakeBroadcastPass::InsertExplicitFakeBroadcastPass()
             root->input(i).replace_source_output(new_args[i]->output(0));
         }
 
+        reset_broacast_config(root);
+
         return true;
     };
 
     // only numpy broadcast type is supported currently
-    auto any = std::make_shared<pattern::op::Label>(element::f32, Shape {},
+    auto any = std::make_shared<pattern::op::Label>(pattern::any_input(),
         [](std::shared_ptr<Node> n) {
-            // if (n->inputs().size() > 0)
-            //     remark(2) << n->input(0).get_source_output().get_node()->get_friendly_name() << std::endl;
-            // if (n->inputs().size() > 1)
-            //     remark(2) << n->input(1).get_source_output().get_node()->get_friendly_name() << std::endl;
             // should add supports_auto_broadcast to SquaredDifference
-            return (ngraph::op::supports_auto_broadcast(n) || !!as_type_ptr<op::SquaredDifference>(n))
+            return (ngraph::op::supports_auto_broadcast(n) || !!as_type_ptr<opset1::SquaredDifference>(n) || !!as_type_ptr<opset1::Mod>(n))
                 && n->get_autob().m_type == op::AutoBroadcastType::NUMPY; });
 
     auto m = std::make_shared<ngraph::pattern::Matcher>(any, "InsertExplicitFakeBroadcastPass");

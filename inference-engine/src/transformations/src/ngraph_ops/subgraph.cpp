@@ -8,9 +8,10 @@
 #include <memory>
 #include <array>
 
-#include "ngraph/util.hpp"
-#include "ngraph/validation_util.hpp"
+#include <ngraph/util.hpp>
+#include <ngraph/validation_util.hpp>
 #include <ngraph/pass/visualize_tree.hpp>
+#include <ngraph/pass/manager.hpp>
 #include <ngraph/rt_info.hpp>
 #include <ngraph/pattern/op/wrap_type.hpp>
 
@@ -149,10 +150,14 @@ void op::Subgraph::canonicalize(const BlockedShapeVector& output_shapes, const B
         remark(11) << shape << std::endl;
     }
 
-    // FIXME: replace constants with scalars
+    // FIXME: replace only constants which are actually should be represented as scalars during code generation and probably move this step a bit later
     for (auto op : m_body->get_ordered_ops()) {
         if (auto constant = ngraph::as_type_ptr<opset1::Constant>(op)) {
             std::cout << constant << std::endl;
+            auto scalar = std::make_shared<op::Scalar>(*constant);
+            scalar->set_friendly_name(constant->get_friendly_name());
+            ngraph::copy_runtime_info(constant, scalar);
+            ngraph::replace_node(constant, scalar);
         }
     }
 
@@ -210,96 +215,37 @@ void op::Subgraph::canonicalize(const BlockedShapeVector& output_shapes, const B
                 auto shape = Shape(left.get_shape());
                 shape[shape.size()-1] = 1;
 
+                // FIXME: use ShapeOf to keep it dynamic
                 auto begin = opset1::Constant::create(element::i64, Shape{shape.size()}, std::vector<int64_t>(shape.size(), 0));
                 auto end   = opset1::Constant::create(element::i64, Shape{shape.size()}, shape);
                 auto slice = std::make_shared<opset1::StridedSlice>(left.get_source_output(), begin, end, std::vector<int64_t>{0}, std::vector<int64_t>{0});
 
                 auto node = left.get_source_output().get_node_shared_ptr();
                 slice->set_friendly_name(node->get_friendly_name()+"_stride");
-                ngraph::copy_runtime_info({slice, begin, end}, node);
+                ngraph::copy_runtime_info(node, {slice, begin, end});
                 left.replace_source_output(slice->output(0));
             }
         }
     }
     m_body->validate_nodes_and_infer_types();
+    remark(10) << "after canonicalization" << std::endl;
+    print();
+}
+
+void op::Subgraph::convert_to_snippet_dialect() {
+    ngraph::pass::Manager manager;
+    manager.register_pass<ngraph::pass::InsertExplicitLoadsPass>();
+    manager.register_pass<ngraph::pass::InsertExplicitFakeBroadcastPass>();
+    manager.register_pass<ngraph::pass::MergeLoadFakeBroadcastToBroadcastLoadPass>();
+    manager.run_passes(m_body);
+    remark(10) << "after dialect transform" << std::endl;
     print();
 }
 
 bool op::Subgraph::generate(const BlockedShapeVector& output_shapes, const BlockedShapeVector& input_shapes) {
     canonicalize(output_shapes, input_shapes);
+    convert_to_snippet_dialect();
     return false;
-
-    // visualize("0_initial.dot", m_body);
-    // adds explicit broadcasts if needed
-    // ToDO: this indeed make model not reshapable, need to come up with more clever way to insert fake broadcast,
-    // well on the other hand, if we replace scalar constant with Scalar op / or ShapeOf, we could have broadcasts that are reshapable
-    ngraph::pass::InsertExplicitFakeBroadcastPass().run_on_function(m_body);
-
-    // Legalization on correct canonical form, disable autobroadcast on operation itself
-    for (auto op : m_body->get_ordered_ops()) {
-        if (auto binary = std::dynamic_pointer_cast<op::util::BinaryElementwiseArithmetic>(op)) {
-            bool is_scalar = false;
-            for (auto input : binary->inputs()) {
-                if (input.get_shape() == Shape() || ngraph::shape_size(input.get_shape()) == 1) {
-                    is_scalar = true;
-                }
-            }
-
-            if (!is_scalar)
-                binary->set_autob(op::AutoBroadcastSpec::NONE);
-        } else if (auto binary = std::dynamic_pointer_cast<op::util::BinaryElementwiseComparison>(op)) {
-            bool is_scalar = false;
-            for (auto input : binary->inputs()) {
-                if (input.get_shape() == Shape() || ngraph::shape_size(input.get_shape()) == 1) {
-                    is_scalar = true;
-                }
-            }
-
-            if (!is_scalar)
-                binary->set_autob(op::AutoBroadcastSpec::NONE);
-        } else if (auto binary = std::dynamic_pointer_cast<op::util::BinaryElementwiseLogical>(op)) {
-            bool is_scalar = false;
-            for (auto input : binary->inputs()) {
-                if (input.get_shape() == Shape() || ngraph::shape_size(input.get_shape()) == 1) {
-                    is_scalar = true;
-                }
-            }
-
-            if (!is_scalar)
-                binary->set_autob(op::AutoBroadcastSpec::NONE);
-        }
-    }
-
-
-    // visualize("1_InsertExplicitFakeBroadcastPass.dot", f);
-    // remark(2) << "InsertExplicitFakeBroadcastPass is done!" << std::endl;
-
-    // FixMe: pull up as FakeBroadcast
-    // propagate broadcast up if needed
-    // Mostly unused and disabled for now, FixMe: reenable
-    // ngraph::pass::PullUpBroadcastsPass().run_on_function(m_body);
-    // visualize("2_PullUpBroadcastsPass.dot", m_body);
-    // remark(2) << "PullUpBroadcastsPass is done!" << std::endl;
-
-    // adds explicit loads after each marameter
-    ngraph::pass::InsertExplicitLoadsPass().run_on_function(m_body);
-    // visualize("3_InsertExplicitLoadsPass.dot", m_body);
-    remark(2) << "InsertExplicitLoadsPass is done!" << std::endl;
-
-    // merge Load followed with fake broadcast to broadcast load
-    ngraph::pass::MergeLoadFakeBroadcastToBroadcastLoadPass().run_on_function(m_body);
-    // visualize("4_MergeLoadFakeBroadcastToBroadcastLoadPass.dot", m_body);
-    remark(2) << "MergeLoadFakeBroadcastToBroadcastLoadPass is done!" << std::endl;
-
-    // 4th step merge consecutive load+broadcast+constants,replace broadcast with passtrought/nop
-
-    // 5th step possibly eliminate duplicates
-
-    remark(2) << "Done with transformations!!" << std::endl;
-
-    // Old flow
-    // ngraph::pass::DetectBroadcastPass().run_on_function(f);
-    // visualize("DetectBroadcastPass.dot", f);
 
     // actual code mission
     if (m_generator != nullptr)
