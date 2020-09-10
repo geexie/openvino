@@ -53,6 +53,7 @@ MKLDNNPlugin::MKLDNNSnippetNode::MKLDNNSnippetNode(const InferenceEngine::CNNLay
         snippet = std::make_shared<ngraph::op::Subgraph>(subgraph_node_inputs, new_body);
         ngraph::copy_runtime_info(snippet_ref, snippet);
         snippet->set_friendly_name(snippet_ref->get_friendly_name());
+        // Disable for ref mode
         // snippet->set_generator(std::make_shared<ngraph::snippet::CPUGenerator>());
     } else {
         snippet_ref.reset();
@@ -92,21 +93,11 @@ void MKLDNNPlugin::MKLDNNSnippetNode::initSupportedPrimitiveDescriptors() {
     }
 
     auto pushDesc = [&](mkldnn::memory::format format, memory::data_type precision) {
-        remark(1) << this->snippet->get_friendly_name() << " in "
-            << " " << config.inConfs.size()
-            << " " << getCnnLayer()->insData.size()
-            << " " << this->getParentEdges().size()
-            << " " << this->inDims.size() << std::endl;
-
-        for (int k = 0; k < this->inDims.size(); k++) {
-            remark(1) << "  MKLDNNSnippetNode input dims " << this->inDims[k].ndims()  << std::endl;
-            // print_dims(this->inDims[k].ToSizeVector());
-
-            auto current_format = this->inDims[k].ndims() < 4 ? mkldnn::memory::any : format;
-
-            if (this->inDims[k].ndims() == 5 && current_format == mkldnn::memory::nchw)
+        auto adjast_format = [](const MKLDNNDims& dims, mkldnn::memory::format format) -> mkldnn::memory::format {
+            auto current_format = dims.ndims() < 4 ? mkldnn::memory::any : format;
+            if (dims.ndims() == 5 && current_format == mkldnn::memory::nchw)
                 current_format = mkldnn::memory::ncdhw;
-            if (this->inDims[k].ndims() == 5 && current_format == mkldnn::memory::nChw8c)
+            if (dims.ndims() == 5 && current_format == mkldnn::memory::nChw8c)
                 current_format = mkldnn::memory::nCdhw8c;
 
             auto block_szie = mkldnn::impl::cpu::mayiuse(mkldnn::impl::cpu::avx512_common) ? 16 : 8;
@@ -116,7 +107,17 @@ void MKLDNNPlugin::MKLDNNSnippetNode::initSupportedPrimitiveDescriptors() {
                 current_format = mkldnn::memory::nCdhw16c;
 
             remark(1) << "current_format = " << mkldnn_fmt2str(memory::convert_to_c(current_format)) << std::endl;
-            config.inConfs[k].desc = MKLDNNMemoryDesc(this->inDims[k], precision, current_format);
+            return current_format;
+        };
+
+        remark(1) << this->snippet->get_friendly_name() << " in "
+            << " " << config.inConfs.size()
+            << " " << getCnnLayer()->insData.size()
+            << " " << this->getParentEdges().size()
+            << " " << this->inDims.size() << std::endl;
+
+        for (int k = 0; k < this->inDims.size(); k++) {
+            config.inConfs[k].desc = MKLDNNMemoryDesc(this->inDims[k], precision, adjast_format(inDims[k], format));
         }
 
         remark(1) << this->snippet->get_friendly_name() << " out "
@@ -126,51 +127,15 @@ void MKLDNNPlugin::MKLDNNSnippetNode::initSupportedPrimitiveDescriptors() {
             << " " << this->getChildEdgesAtPort(0).size()
             << " " << this->outDims.size() << std::endl;
 
-        // it may be multiple edges per output port
         for (int k = 0; k < this->outDims.size(); k++) {
-            remark(1) << "  MKLDNNSnippetNode output dims " << this->outDims[k].ndims() << std::endl;
-            // print_dims(this->outDims[k].ToSizeVector());
-
-            auto current_format = this->outDims[k].ndims() < 4 ? mkldnn::memory::any : format;
-            if (this->outDims[k].ndims() == 5 && current_format == mkldnn::memory::nchw)
-                current_format = mkldnn::memory::ncdhw;
-            if (this->outDims[k].ndims() == 5 && current_format == mkldnn::memory::nChw8c)
-                current_format = mkldnn::memory::nCdhw8c;
-
-            auto block_szie = mkldnn::impl::cpu::mayiuse(mkldnn::impl::cpu::avx512_common) ? 16 : 8;
-            if (block_szie == 16 && current_format == mkldnn::memory::nChw8c)
-                current_format = mkldnn::memory::nChw16c;
-            if (block_szie == 16 && current_format == mkldnn::memory::nCdhw8c)
-                current_format = mkldnn::memory::nCdhw16c;
-
-            remark(1) << "current_format = " << mkldnn_fmt2str(memory::convert_to_c(current_format)) << std::endl;
-            config.outConfs[k].desc = MKLDNNMemoryDesc(this->outDims[k], precision, current_format);
+            config.outConfs[k].desc = MKLDNNMemoryDesc(this->outDims[k], precision, adjast_format(outDims[k], format));
         }
 
-        remark(1) << "descriptor created!!" << std::endl;
         supportedPrimitiveDescriptors.push_back({config, impl_desc_type::unknown, format});
     };
 
-    auto hasBroadcastByC = [this]() -> bool {
-        for (auto op : ngraph::as_type_ptr<ngraph::op::Subgraph>(snippet)->get_body()->get_ops()) {
-            if (ngraph::op::supports_auto_broadcast(op)) {
-                auto shape = op->input(0).get_shape();
-                for (auto input : op->inputs()) {
-                    if (input.get_shape().size() > 1 && shape[1] != input.get_shape()[1] && ngraph::shape_size(input.get_shape()) != 1) {
-                        remark(11) << " POSSIBLE C BROADCAST IS DETECTED" << shape << " " << input.get_shape() << std::endl;
-                        return true;
-                    }
-                }
-            }
-        }
-        return false;
-    };
-
-    // FIXME: temporary disables blocking if broadcast by C, use reshape with transpose over graph instead of just reshape
     // FIXME: check if non-4 or 5 dimension, since no blocking in this case anyway
-    // if (!hasBroadcastByC())
-    //     pushDesc(mkldnn::memory::nChw8c, memory::f32);
-
+    pushDesc(mkldnn::memory::nChw8c, memory::f32);
     pushDesc(mkldnn::memory::nchw, memory::f32);
 }
 
@@ -234,41 +199,36 @@ void MKLDNNPlugin::MKLDNNSnippetNode::createPrimitive() {
 // FIXME: it seems that scheduler is something plugin dependent so it might be better to call generated code out from here,
 // or pass executor functor to
 void MKLDNNPlugin::MKLDNNSnippetNode::execute(mkldnn::stream strm) {
-    auto& subgraph = snippet_ref;
-    ngraph::HostTensorVector inputs = [this](const std::shared_ptr<ngraph::op::Subgraph>& subgraph) {
-        ngraph::HostTensorVector inputs;
-        auto params = subgraph->get_body()->get_parameters();
-        for (size_t i = 0; i < inDims.size(); i++) {
-            auto & parents = getParentEdgesAtPort(i);
-            IE_ASSERT(parents.size() == 1);
-            auto &mem = parents[0]->getMemory();
+    auto& subgraph = snippet;
 
-            auto type = subgraph->input(i).get_element_type();
-            auto ptr = reinterpret_cast<uint8_t *>(mem.GetData())
-                            + mem.GetDescriptor().data.layout_desc.blocking.offset_padding *
-                            MKLDNNExtensionUtils::sizeOfDataType(mkldnn::memory::data_type(mem.GetDescriptor().data.data_type));
+    ngraph::HostTensorVector inputs;
+    auto params = subgraph->get_body()->get_parameters();
+    for (size_t i = 0; i < inDims.size(); i++) {
+        auto & parents = getParentEdgesAtPort(i);
+        IE_ASSERT(parents.size() == 1);
+        auto &mem = parents[0]->getMemory();
 
-            inputs.push_back(std::make_shared<ngraph::HostTensor>(type, params[i]->get_shape(), reinterpret_cast<void *>(ptr)));
-        }
-        return inputs;
-    }(subgraph);
+        auto type = subgraph->input(i).get_element_type();
+        auto ptr = reinterpret_cast<uint8_t *>(mem.GetData())
+                        + mem.GetDescriptor().data.layout_desc.blocking.offset_padding *
+                        MKLDNNExtensionUtils::sizeOfDataType(mkldnn::memory::data_type(mem.GetDescriptor().data.data_type));
 
-    ngraph::HostTensorVector outputs = [this](const std::shared_ptr<ngraph::op::Subgraph>& subgraph) {
-        ngraph::HostTensorVector outputs;
-        auto results = subgraph->get_body()->get_results();
-        for (size_t i = 0; i < outDims.size(); i++) {
-            auto & child = getChildEdgesAtPort(i);
-            auto &mem = child[0]->getMemory();
+        inputs.push_back(std::make_shared<ngraph::HostTensor>(type, params[i]->get_shape(), reinterpret_cast<void *>(ptr)));
+    }
 
-            auto type = subgraph->output(i).get_element_type();
-            auto ptr = reinterpret_cast<uint8_t *>(mem.GetData())
-                            + mem.GetDescriptor().data.layout_desc.blocking.offset_padding *
-                            MKLDNNExtensionUtils::sizeOfDataType(mkldnn::memory::data_type(mem.GetDescriptor().data.data_type));
+    ngraph::HostTensorVector outputs;
+    auto results = subgraph->get_body()->get_results();
+    for (size_t i = 0; i < outDims.size(); i++) {
+        auto & child = getChildEdgesAtPort(i);
+        auto &mem = child[0]->getMemory();
 
-            outputs.push_back(std::make_shared<ngraph::HostTensor>(type, results[i]->get_shape(), reinterpret_cast<void *>(ptr)));
-        }
-        return outputs;
-    }(subgraph);
+        auto type = subgraph->output(i).get_element_type();
+        auto ptr = reinterpret_cast<uint8_t *>(mem.GetData())
+                        + mem.GetDescriptor().data.layout_desc.blocking.offset_padding *
+                        MKLDNNExtensionUtils::sizeOfDataType(mkldnn::memory::data_type(mem.GetDescriptor().data.data_type));
+
+        outputs.push_back(std::make_shared<ngraph::HostTensor>(type, results[i]->get_shape(), reinterpret_cast<void *>(ptr)));
+    }
 
     subgraph->evaluate(outputs, inputs);
 }

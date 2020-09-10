@@ -12,6 +12,7 @@
 #include "ngraph/validation_util.hpp"
 #include <ngraph/pass/visualize_tree.hpp>
 #include <ngraph/rt_info.hpp>
+#include <ngraph/pattern/op/wrap_type.hpp>
 
 #include "transformations/snippets/remarks.hpp"
 #include "transformations/snippets/insert_explisit_fakebroadcast_pass.hpp"
@@ -27,11 +28,11 @@ static void visualize(const std::string& name, std::shared_ptr<ngraph::Function>
     ngraph::pass::VisualizeTree(name).run_on_function(f);
 }
 
+constexpr NodeTypeInfo op::Subgraph::type_info;
+
 void op::Subgraph::set_generator(std::shared_ptr<Generator> generator) {
     m_generator = generator;
 }
-
-constexpr NodeTypeInfo op::Subgraph::type_info;
 
 op::Subgraph::Subgraph(const OutputVector& args, std::shared_ptr<Function> body)
     : Op(args), m_body(body), m_generator(nullptr) {
@@ -42,12 +43,10 @@ op::Subgraph::Subgraph(const NodeVector& args, std::shared_ptr<Function> body)
     : Subgraph(as_output_vector(args), body) {}
 
 std::shared_ptr<Node> op::Subgraph::clone_with_new_inputs(const OutputVector& inputs) const {
-    // FIXME: it should be clone for a body which keeps original operations friendly names
-    return make_shared<Subgraph>(inputs, m_body);
+    return make_shared<Subgraph>(inputs, ngraph::clone_function(*m_body.get()));
 }
 
 void op::Subgraph::validate_and_infer_types() {
-    // Go over all inputs in the node and replace parameters in m_body with new shape/type
     // FIXME: Check if shape/type is changed before replacement?
     for (size_t i = 0; i < get_input_size(); ++i) {
         m_body->replace_parameter(i, std::make_shared<Parameter>(get_input_element_type(i), get_input_partial_shape(i)));
@@ -55,22 +54,11 @@ void op::Subgraph::validate_and_infer_types() {
 
     m_body->validate_nodes_and_infer_types();
 
-    // Go over all outputs and update shape/type from m_body
     set_output_size(m_body->get_output_size());
-
     for (size_t i = 0; i < get_output_size(); ++i) {
         set_output_type(i, m_body->get_output_element_type(i), m_body->get_output_partial_shape(i));
     }
 
-    // if (m_body->get_output_size() > 1) {
-    //     std::cout << "subgraph " << this->get_friendly_name() << " " << *this << " has multiple outputs" << std::endl;
-
-    //     for (auto op : this->m_body->get_ordered_ops()) {
-    //         std::cout << "  " << op->get_friendly_name() << " " << op << std::endl;
-    //     }
-    // }
-
-    // cleanup codegen state
     ptr = nullptr;
 }
 
@@ -118,6 +106,20 @@ auto op::Subgraph::wrap_node_as_subgraph(const std::shared_ptr<ngraph::Node>& no
     return subgraph;
 }
 
+std::shared_ptr<op::Subgraph> op::Subgraph::make_canonical_from_this() {
+    ngraph::OutputVector subgraph_node_inputs;
+    for (auto input : this->input_values()) {
+        subgraph_node_inputs.push_back(input);
+    }
+    auto new_body = ngraph::clone_function(*this->get_body().get());
+    auto snippet = std::make_shared<ngraph::op::Subgraph>(subgraph_node_inputs, new_body);
+    ngraph::copy_runtime_info(this->shared_from_this(), snippet);
+    snippet->set_friendly_name(this->get_friendly_name());
+    snippet->set_generator(this->m_generator);
+
+    return snippet;
+}
+
 // We also can think of canonization as of pass to copy original subgraph and transforming it to canonical form suitable for code generation
 // pass actual parameters and results shapes to generate for as well as channel mapping,
 // we need to distinguish between 5d tensors that represents <N, C, H, W, c> and <N, C, D, H, W> somehow like locked dimensions
@@ -125,43 +127,43 @@ auto op::Subgraph::wrap_node_as_subgraph(const std::shared_ptr<ngraph::Node>& no
 //
 // Dunamic dimension like <N, C, H, W> = <?, ?, ?, ?> or <N, C, H, W> = <?, ?, ?, W> means that we can merge the consecutive and linearise
 // <N, C, H, W> = <?> or <N, C, H, W> = <?, W> folding consecutive dimensions
-bool op::Subgraph::generate(const BlockedShapeVector& output_shapes, const BlockedShapeVector& input_shapes) {
-    return false;
-    // FIXME: check if types are compatible, as well for quantized topologies
-    // NODE_VALIDATION_CHECK(this, input_shapes.size() != m_body->get_parameters().size(),
-        // "number of parameters for snippet doesn't much passed to generate method: ", input_shapes.size(), ").");
+// FIXME: check that if input is blocked output is also blocked, if not we should map Result node with a type conversion
+// Is it better to modify storing rather than loading???
+// FIXME: it's better to collapse not required dimensions rather than introduce some artificial,
+// this will make linearization more natural
+// FIXME: at least check that on putput we got that is expected
+// assume blocking is done only by C dimesion. It seems that we need to insert AxisVector to every tensor to support true blocking
+// this actually true only if input and putput shapes are not the same.
+// FIXME: check if types are compatible, as well for quantized topologies
+void op::Subgraph::canonicalize(const BlockedShapeVector& output_shapes, const BlockedShapeVector& input_shapes) {
+    NODE_VALIDATION_CHECK(this, input_shapes.size() == m_body->get_parameters().size(),
+        "Number of parameters for snippet doesn't much passed to generate method: ", input_shapes.size(), " vs ", m_body->get_parameters().size(), ".");
 
+    NODE_VALIDATION_CHECK(this, output_shapes.size() == m_body->get_results().size(),
+        "number of results for snippet doesn't much passed to generate method: ", output_shapes.size(), " vs ", m_body->get_results().size(), ".");
 
-    // canonization
     for (auto& shape : input_shapes) {
-        remark(1) << shape << std::endl;
+        remark(11) << shape << std::endl;
     }
     for (auto& shape : output_shapes) {
-        remark(1) << shape << std::endl;
+        remark(11) << shape << std::endl;
     }
 
-    if (output_shapes.size() != m_body->get_results().size()) {
-        throw ngraph::ngraph_error("number of results for snippet doesn't much passed to generate method");
+    // FIXME: replace constants with scalars
+    for (auto op : m_body->get_ordered_ops()) {
+        if (auto constant = ngraph::as_type_ptr<opset1::Constant>(op)) {
+            std::cout << constant << std::endl;
+        }
     }
-
-    if (input_shapes.size() != m_body->get_parameters().size()) {
-        throw ngraph::ngraph_error("number of parameters for snippet doesn't much passed to generate method");
-    }
-
-    // FixMe: check that if input is blocked output is also blocked, if not we should map Result node with a type conversion
-    // Is it better to modify storing rather than loading???
 
     // it should be in subgraph node to be aligned with internal and external parameter list, but adding this for testing
     for (int i = 0; i < m_body->get_parameters().size(); i++) {
         auto param = m_body->get_parameters()[i];
-
-        // FixMe: it's better to collapse not required dimensions rather than introduce some artificial,
-        // this will make linearization more natural
         if (param->get_shape().size() < 4) {
             std::vector<size_t> shape(4, 1);
             std::copy(param->get_shape().begin(), param->get_shape().end(), &shape.at(4 - param->get_shape().size()) );
 
-            remark(1) << "parameter" << i << " shape " << param->get_shape() << " reshaping to " << ngraph::Shape(shape) << std::endl;
+            remark(11) << "parameter" << i << " shape " << param->get_shape() << " reshaping to " << ngraph::Shape(shape) << std::endl;
 
             m_body->replace_parameter(i, std::make_shared<opset1::Parameter>(param->get_element_type(), ngraph::Shape(shape)));
         } else if (param->get_shape().size() >= 4) {
@@ -171,89 +173,61 @@ bool op::Subgraph::generate(const BlockedShapeVector& output_shapes, const Block
             }
 
             m_body->replace_parameter(i, std::make_shared<opset1::Parameter>(std::get<2>(input_shapes[i]), std::get<0>(input_shapes[i])));
-            remark(1) << "parameter" << i << " shape " << param->get_shape() << " reshaping to " << std::get<0>(input_shapes[i]) << std::endl;
-        }
-    }
-
-    // reshape constants to 4d as well
-    // FixMe: fix bloking reshape, may be it's better to pass them as parameters, if they are not Scalars????
-    for (auto op : m_body->get_ordered_ops()) {
-        if (auto constant = as_type_ptr<opset1::Constant>(op)) {
-            // scalars will be replaced after
-            if (constant->get_shape().size() < 4 && constant->get_shape() != Shape()) {
-                std::vector<size_t> shape(4, 1);
-                std::copy(constant->get_shape().begin(), constant->get_shape().end(), &shape.at(4 - constant->get_shape().size()) );
-                remark(1) << "constant" << " shape " << constant->get_shape() << " reshaping to " << Shape(shape) << std::endl;
-                auto values = constant->get_data_ptr();
-                auto new_constant = std::make_shared<opset1::Constant>(constant->get_element_type(), Shape(shape), values);
-                ngraph::replace_node(constant, new_constant);
-                new_constant->set_friendly_name(constant->get_friendly_name());
-                ngraph::copy_runtime_info(constant, new_constant);
-            }
+            remark(11) << "parameter" << i << " shape " << param->get_shape() << " reshaping to " << std::get<0>(input_shapes[i]) << std::endl;
         }
     }
 
     m_body->validate_nodes_and_infer_types();
 
-    // FixMe: at least check that on putput we got that is expected
-    // assume blocking is done only by C dimesion. It seems that we need to insert AxisVector to every tensor to support true blocking
     for (int i = 0; i < m_body->get_results().size(); i++) {
         auto result = m_body->get_results()[i];
         PartialShape partial(result->get_shape());
-
-        remark(1) << "result" << i << " shape " << result->get_shape() << " while requested " << std::get<0>(output_shapes[i]) << std::endl;
+        remark(11) << "result" << i << " shape " << result->get_shape() << " while requested " << std::get<0>(output_shapes[i]) << std::endl;
 
         bool isCompatible = ngraph::PartialShape::broadcast_merge_into(partial, std::get<0>(output_shapes[i]), op::AutoBroadcastSpec::NUMPY);
-        remark(1) << "result" << i << " isCompatible = " << isCompatible << " " << partial << std::endl;
+        remark(11) << "result" << i << " isCompatible = " << isCompatible << " " << partial << std::endl;
 
-        // indeed, in this case some layout transform should be placed
-        if (!isCompatible) {
-            auto axises = std::get<1>(output_shapes[i]);
-            auto shape = std::get<0>(output_shapes[i]);
+        // equality check won't pass since we reshape without changes on external snippet edges
+        NODE_VALIDATION_CHECK(this, /*result->get_shape() == std::get<0>(output_shapes[i])*/ isCompatible,
+            "Inferend and passed results shapes are difference for snippet : ", result->get_shape(), " vs ", std::get<0>(output_shapes[i]), ".");
+    }
 
-            // unblocking
-            if (partial.rank() == shape.size()+1) {
-                std::cout << "most likely this is blocking" << partial.rank() << " " << result->get_input_node_shared_ptr(0) << std::endl;
+    auto ops = m_body->get_ordered_ops();
+    for (auto op : ops) {
+        if (ngraph::op::supports_auto_broadcast(op)) {
+            auto shape = op->input(0).get_shape();
+            bool vector_broadcast = false;
+            for (auto input : op->inputs()) {
+                if (input.get_shape().size() > 1 && shape[1] != input.get_shape()[1] && ngraph::shape_size(input.get_shape()) != 1) {
+                    vector_broadcast = true;
+                }
+            }
 
-                auto newShape = std::vector<uint64_t>({0, 1, 4, 2, 3}/*{shape[0], shape[1]/8, 8, shape[2], shape[3]}*/);
-                auto config = std::make_shared<opset1::Constant>(element::u64, Shape{5}, newShape);
+            if (vector_broadcast) {
+                NODE_VALIDATION_CHECK(op.get(), op->inputs().size() == 2, "only binary operation for implicit broadcast is supported");
 
-                auto transpose = std::make_shared<opset1::Transpose>(result->get_input_node_shared_ptr(0), config);
-                result->set_argument(0, transpose);
-                result->validate_and_infer_types();
-                PartialShape partial(result->get_shape());
+                auto left = op->input(0).get_shape()[1] == 1 ? op->input(0) : op->input(1);
+                auto shape = Shape(left.get_shape());
+                shape[shape.size()-1] = 1;
 
-                std::cout << transpose->get_output_shape(0) << " " << result->get_output_shape(0)
-                << " " << ngraph::PartialShape::broadcast_merge_into(partial, std::get<0>(output_shapes[i]), op::AutoBroadcastSpec::NUMPY)
-                << " " << partial << std::endl;
-                // auto reshape = std::make_shared<opset1::Reshape>(result->get_input_node_shared_ptr(0), std::make_shared<opset1::Constant>(
-                //     element::Type(element::f32), Shape(), {shape[0], shape[1]/8, 8, shape[2], shape[3]}
-                // ));
-            // blocking
-            } else if (partial.rank() == shape.size()) {
-                auto newShape = std::vector<uint64_t>({shape[0], shape[1], shape[4], shape[2], shape[3]});
-                auto config = std::make_shared<opset1::Constant>(element::u64, Shape{5}, newShape);
-                auto reshape = std::make_shared<opset1::Reshape>(result->get_input_node_shared_ptr(0), config, false);
-                std::cout << "insert type conversion here " << axises << reshape->get_output_shape(0) << std::endl;
+                auto begin = opset1::Constant::create(element::i64, Shape{shape.size()}, std::vector<int64_t>(shape.size(), 0));
+                auto end   = opset1::Constant::create(element::i64, Shape{shape.size()}, shape);
+                auto slice = std::make_shared<opset1::StridedSlice>(left.get_source_output(), begin, end, std::vector<int64_t>{0}, std::vector<int64_t>{0});
 
-                newShape = std::vector<uint64_t>({0, 1, 3, 4, 2}/*{shape[0], shape[1]/8, 8, shape[2], shape[3]}*/);
-                config = std::make_shared<opset1::Constant>(element::u64, Shape{5}, newShape);
-
-                auto transpose = std::make_shared<opset1::Transpose>(reshape, config);
-                result->set_argument(0, transpose);
-                result->validate_and_infer_types();
-
-                std::cout << transpose->get_output_shape(0) << " " << result->get_output_shape(0)
-                << " " << ngraph::PartialShape::broadcast_merge_into(partial, std::get<0>(output_shapes[i]), op::AutoBroadcastSpec::NUMPY)
-                << " " << partial << std::endl;
-            } else {
-                std::cout << "insert type conversion here " << axises << std::endl;
-                throw ngraph::ngraph_error("resulting shape is not what is expected. Is it legal??");
+                auto node = left.get_source_output().get_node_shared_ptr();
+                slice->set_friendly_name(node->get_friendly_name()+"_stride");
+                ngraph::copy_runtime_info({slice, begin, end}, node);
+                left.replace_source_output(slice->output(0));
             }
         }
     }
+    m_body->validate_nodes_and_infer_types();
+    print();
+}
 
-    // return true;
+bool op::Subgraph::generate(const BlockedShapeVector& output_shapes, const BlockedShapeVector& input_shapes) {
+    canonicalize(output_shapes, input_shapes);
+    return false;
 
     // visualize("0_initial.dot", m_body);
     // adds explicit broadcasts if needed
@@ -379,7 +353,6 @@ bool op::Subgraph::generate(const BlockedShapeVector& output_shapes, const Block
 
 bool op::Subgraph::evaluate(const HostTensorVector& outputs, const HostTensorVector& inputs) const {
     if (!m_generator) {
-        std::cout << "We are evaluating " << inputs.size() << " -> " << outputs.size() << std::endl;
         return m_body->evaluate(outputs, inputs);
     }
     // return true;

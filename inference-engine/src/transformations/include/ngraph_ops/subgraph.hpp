@@ -32,6 +32,7 @@ public:
 
     bool visit_attributes(AttributeVisitor& visitor) override;
 
+    // it would also resets codegen state, once it's
     void validate_and_infer_types() override;
 
     std::shared_ptr<Node> clone_with_new_inputs(const OutputVector& inputs) const override;
@@ -43,6 +44,8 @@ public:
     std::shared_ptr<Generator> get_generator() const {
         return m_generator;
     }
+
+    std::shared_ptr<Subgraph> make_canonical_from_this();
 
     bool generate(const BlockedShapeVector& output_shapes, const BlockedShapeVector& input_shapes);
     bool evaluate(const HostTensorVector& output_values, const HostTensorVector& input_values) const override;
@@ -61,6 +64,13 @@ public:
     static auto wrap_node_as_subgraph(const std::shared_ptr<ngraph::Node>& node) -> std::shared_ptr<ngraph::op::Subgraph>;
 
 private:
+    // 4 or 5d and blocked
+    void canonicalize(const BlockedShapeVector& output_shapes, const BlockedShapeVector& input_shapes);
+
+    // bool relax_shapes();
+
+    // bool convert_to_snippet_dialect();
+
     std::shared_ptr<Function> m_body;
     std::vector<std::shared_ptr<opset1::Constant>> m_constants;
 
