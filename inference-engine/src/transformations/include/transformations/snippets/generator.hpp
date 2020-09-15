@@ -56,7 +56,7 @@ public:
     // generate it like normal compilers usually do in future
     virtual void emit(std::shared_ptr<opset1::Parameter>& op, RegInfo& registers, bool vec) const = 0;
     virtual void emit(std::shared_ptr<opset1::Result>& op, RegInfo& registers, bool vec) const = 0;
-    virtual void emit(std::shared_ptr<opset1::Constant>& op, RegInfo& registers, bool vec) const = 0;
+    virtual void emit(std::shared_ptr<op::Scalar>& op, RegInfo& registers, bool vec) const = 0;
 
     virtual void emit(std::shared_ptr<opset1::Add>& op, RegInfo& registers) const = 0;
     virtual void emit(std::shared_ptr<opset1::Subtract>& op, RegInfo& registers) const = 0;
@@ -78,7 +78,7 @@ public:
     // FixMe: exclude from opset
     virtual void emit(std::shared_ptr<opset1::Broadcast>& broadcast, RegInfo& registers) const = 0;
 
-    virtual void emit_table(std::shared_ptr<opset1::Constant>& constant) const = 0;
+    virtual void emit_table(std::shared_ptr<op::Scalar>& constant) const = 0;
     virtual void emit_table(std::shared_ptr<opset1::Erf>& op) const = 0;
     virtual void emit_table(std::shared_ptr<opset1::Clamp>& op) const = 0;
     virtual void emit_table(std::shared_ptr<opset1::Sigmoid>& op) const = 0;

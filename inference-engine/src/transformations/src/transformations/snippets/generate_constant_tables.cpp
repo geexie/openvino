@@ -10,7 +10,7 @@ bool ngraph::pass::GenerateConstntTables::run_on_function(std::shared_ptr<Functi
 
         if (auto op = std::dynamic_pointer_cast<opset1::Erf>(n)) {
             m_generator->emit_table(op);
-        } else if (auto op = std::dynamic_pointer_cast<opset1::Constant>(n)) {
+        } else if (auto op = std::dynamic_pointer_cast<op::Scalar>(n)) {
             m_generator->emit_table(op);
         } else if (auto op = std::dynamic_pointer_cast<opset1::Clamp>(n)) {
             m_generator->emit_table(op);

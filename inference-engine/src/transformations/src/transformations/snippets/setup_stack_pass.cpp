@@ -6,6 +6,7 @@
 
 #include <ngraph/opsets/opset1.hpp>
 #include <ngraph/variant.hpp>
+#include "ngraph_ops/scalar.hpp"
 
 // Perhaps, it's better to call this pass setup constants
 // can this pass to be merged with actual constant generation somehow?
@@ -19,7 +20,7 @@ bool ngraph::pass::SetupStackTemporalsOffsetPass::run_on_function(std::shared_pt
             auto x = static_cast<int64_t>(table_offset);
             rt["stackinfo"] = std::make_shared<VariantWrapper<int64_t>>(VariantWrapper<int64_t>(x));
             table_offset += 14;
-        } else if (auto op = std::dynamic_pointer_cast<opset1::Constant>(n)) {
+        } else if (auto op = std::dynamic_pointer_cast<op::Scalar>(n)) {
             // FixMe: why not?
             if (op->outputs().size() != 1) {
                 throw ngraph_error("constant with more than 1 output is not supported");

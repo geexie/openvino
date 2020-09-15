@@ -255,17 +255,20 @@ void CPUGenerator::emit(std::shared_ptr<opset1::SquaredDifference>& op, RegInfo&
 }
 
 void CPUGenerator::emit(std::shared_ptr<opset1::Power>& op, RegInfo& registers) const {
-    remark(1) << "  -> pow" << std::endl;
+    remark(11) << "  -> pow" << std::endl;
     Xbyak::Ymm vmm_src = Xbyak::Ymm(registers.first[0]);
     Xbyak::Ymm vmm_dst = Xbyak::Ymm(registers.second[0]);
 
     auto parent = op->input(1).get_source_output().get_node_shared_ptr();
-    if (!std::dynamic_pointer_cast<opset1::Constant>(parent)) {
+    if (!std::dynamic_pointer_cast</*opset1::Constant*/op::Scalar>(parent)) {
         throw ngraph_error("unsupported non constant power");
     }
 
+    std::cout << "here!!" << std::endl;
+
     if (op->input(1).get_shape() == Shape() || ngraph::shape_size(op->input(1).get_shape()) == 1) {
-        auto order = as_type_ptr<opset1::Constant>(parent)->get_data_ptr<float>()[0];
+        auto order = as_type_ptr<op::Scalar>(parent)->get_data_ptr<float>()[0];
+        std::cout << "order = " << order << std::endl;
         if (order == -0.5f) {
             h->uni_vsqrtps(vmm_src, vmm_src);
             h->uni_vpcmpeqd(vmm_dst, vmm_dst, vmm_dst);
@@ -288,7 +291,7 @@ void CPUGenerator::emit(std::shared_ptr<opset1::Power>& op, RegInfo& registers) 
         throw ngraph_error("unsupported non scalar power");
     }
 
-    remark(1) << "    -> " << registers.second[0] << " = pow (" << registers.first[0] << "," << registers.first[1] << ")" << std::endl;
+    remark(11) << "    -> " << registers.second[0] << " = pow (" << registers.first[0] << "," << registers.first[1] << ")" << std::endl;
 }
 
 void CPUGenerator::emit(std::shared_ptr<opset1::Sigmoid>& op, RegInfo& registers) const {
@@ -375,7 +378,7 @@ void CPUGenerator::emit(std::shared_ptr<opset1::Sigmoid>& op, RegInfo& registers
 }
 
 // FixMe: It should be Scalar instead!!
-void CPUGenerator::emit(std::shared_ptr<opset1::Constant>& constant, RegInfo& registers, bool vec) const {
+void CPUGenerator::emit(std::shared_ptr<op::Scalar>& constant, RegInfo& registers, bool vec) const {
     if (constant->outputs().size() != 1) {
         throw ngraph_error("constant with more than 1 output is not supported");
     }
@@ -475,11 +478,15 @@ void CPUGenerator::emit(std::shared_ptr<opset1::Erf>& op, RegInfo& registers) co
 void CPUGenerator::emit(std::shared_ptr<opset1::PRelu>& op, RegInfo& registers) const {
     remark(1) << "  -> prelu " << std::endl;
 
-    Xbyak::Ymm vmm_src = Xbyak::Ymm(registers.first[0]);
+    Xbyak::Ymm vmm_src0 = Xbyak::Ymm(registers.first[0]);
+    Xbyak::Ymm vmm_src1 = Xbyak::Ymm(registers.first[1]);
     Xbyak::Ymm vmm_dst  = Xbyak::Ymm(registers.second[0]);
+    Xbyak::Ymm vmm_tmp  = Xbyak::Ymm(registers.second[0]+1);
 
-    // FIXME: add suppport
-    h->uni_vmovups(vmm_dst, vmm_src);
+    h->vmulps(vmm_dst, vmm_src0, vmm_src1);
+    h->vxorps(vmm_tmp, vmm_tmp, vmm_tmp);
+    h->vcmpgtps(vmm_tmp, vmm_src0, vmm_tmp);
+    h->vblendvps(vmm_dst, vmm_dst, vmm_src0, vmm_tmp);
 
     remark(1) << "    -> " << registers.second[0] << " = prelu (" << registers.first[0] << ")" << std::endl;
 }
@@ -589,13 +596,10 @@ static auto getRegisters(std::shared_ptr<ngraph::Node>& n) -> std::pair<std::vec
 
 code CPUGenerator::generate(std::shared_ptr<ngraph::Function>& f) const {
     if (mkldnn::impl::cpu::mayiuse(mkldnn::impl::cpu::avx2)) {
-        remark(0) << "generating for AVX2 ISA" << std::endl;
+        remark(10) << "generating for AVX2 ISA" << std::endl;
     } else {
         throw ngraph::ngraph_error("unsupported architecture for code genration");
     }
-
-    // part 2: generation flow
-    ngraph::pass::AssignRegistersPass().run_on_function(f);
 
     // sets up offsets to constant and temporals
     ngraph::pass::SetupStackTemporalsOffsetPass().run_on_function(f);
@@ -649,7 +653,7 @@ code CPUGenerator::generate(std::shared_ptr<ngraph::Function>& f) const {
     return h->getCode();
 }
 
-void CPUGenerator::emit_table(std::shared_ptr<opset1::Constant>& op) const {
+void CPUGenerator::emit_table(std::shared_ptr<op::Scalar>& op) const {
     auto out_shape = op->output(0).get_tensor().get_shape();
     if (out_shape == Shape() || ngraph::shape_size(out_shape) == 1) {
         remark(1) << "pugging constant " << op->cast_vector<float>()[0] << " to the stack" << std::endl;
@@ -721,7 +725,4 @@ void CPUGenerator::emit_table(std::shared_ptr<opset1::Sigmoid>& op) const {
     for (size_t i = 0; i < sizeof(cvals) / sizeof(cvals[0]); ++i) {
         for (size_t d = 0; d < vlen / sizeof(float); ++d) h->dd(cvals[i]);
     }
-
-    // for (size_t d = 0; d < vlen / sizeof(float); ++d) h->dd(mkldnn::impl::cpu::float2int(alpha_));
-    // for (size_t d = 0; d < vlen / sizeof(float); ++d) h->dd(0);
 }

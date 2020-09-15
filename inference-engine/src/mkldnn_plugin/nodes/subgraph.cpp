@@ -54,7 +54,7 @@ MKLDNNPlugin::MKLDNNSnippetNode::MKLDNNSnippetNode(const InferenceEngine::CNNLay
         ngraph::copy_runtime_info(snippet_ref, snippet);
         snippet->set_friendly_name(snippet_ref->get_friendly_name());
         // Disable for ref mode
-        // snippet->set_generator(std::make_shared<ngraph::snippet::CPUGenerator>());
+        snippet->set_generator(std::make_shared<ngraph::snippet::CPUGenerator>());
     } else {
         snippet_ref.reset();
         snippet.reset();
@@ -134,8 +134,23 @@ void MKLDNNPlugin::MKLDNNSnippetNode::initSupportedPrimitiveDescriptors() {
         supportedPrimitiveDescriptors.push_back({config, impl_desc_type::unknown, format});
     };
 
+    auto hasBroadcastByC = [this]() -> bool {
+        for (auto op : ngraph::as_type_ptr<ngraph::op::Subgraph>(snippet)->get_body()->get_ops()) {
+            if (ngraph::op::supports_auto_broadcast(op)) {
+                auto shape = op->input(0).get_shape();
+                for (auto input : op->inputs()) {
+                    if (input.get_shape().size() > 1 && shape[1] != input.get_shape()[1] && ngraph::shape_size(input.get_shape()) != 1) {
+                        remark(11) << " POSSIBLE C BROADCAST IS DETECTED" << shape << " " << input.get_shape() << std::endl;
+                        return true;
+                    }
+                }
+            }
+        }
+        return false;
+    };
     // FIXME: check if non-4 or 5 dimension, since no blocking in this case anyway
-    pushDesc(mkldnn::memory::nChw8c, memory::f32);
+    if (!hasBroadcastByC())
+        pushDesc(mkldnn::memory::nChw8c, memory::f32);
     pushDesc(mkldnn::memory::nchw, memory::f32);
 }
 

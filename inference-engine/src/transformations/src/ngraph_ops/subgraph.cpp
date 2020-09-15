@@ -21,6 +21,7 @@
 #include "transformations/snippets/pull_up_fakebroadcast_pass.hpp"
 #include "transformations/snippets/insert_explicit_loads_pass.hpp"
 #include "transformations/snippets/merge_load_fakebroadcast_pass.hpp"
+#include "transformations/snippets/assign_registers_pass.hpp"
 
 using namespace std;
 using namespace ngraph;
@@ -197,13 +198,16 @@ void op::Subgraph::canonicalize(const BlockedShapeVector& output_shapes, const B
             "Inferend and passed results shapes are difference for snippet : ", result->get_shape(), " vs ", std::get<0>(output_shapes[i]), ".");
     }
 
+    #if 0
+    // FIXME: it seems that we jit the rock bottom with hackish approach of representing blocking, we cannot distinguish here between
     auto ops = m_body->get_ordered_ops();
     for (auto op : ops) {
         if (ngraph::op::supports_auto_broadcast(op)) {
             auto shape = op->input(0).get_shape();
             bool vector_broadcast = false;
             for (auto input : op->inputs()) {
-                if (input.get_shape().size() > 1 && shape[1] != input.get_shape()[1] && ngraph::shape_size(input.get_shape()) != 1) {
+                if (input.get_shape().size() > 3 && shape[1] != input.get_shape()[1] && ngraph::shape_size(input.get_shape()) != 1) {
+                    std::cout << shape << " " << input.get_shape() << std::endl;
                     vector_broadcast = true;
                 }
             }
@@ -228,6 +232,8 @@ void op::Subgraph::canonicalize(const BlockedShapeVector& output_shapes, const B
         }
     }
     m_body->validate_nodes_and_infer_types();
+    #endif
+
     remark(10) << "after canonicalization" << std::endl;
     print();
 }
@@ -245,9 +251,11 @@ void op::Subgraph::convert_to_snippet_dialect() {
 bool op::Subgraph::generate(const BlockedShapeVector& output_shapes, const BlockedShapeVector& input_shapes) {
     canonicalize(output_shapes, input_shapes);
     convert_to_snippet_dialect();
-    return false;
 
-    // actual code mission
+    // part 2: generation flow
+    ngraph::pass::AssignRegistersPass().run_on_function(m_body);
+
+    // actual code emission
     if (m_generator != nullptr)
         ptr = m_generator->generate(m_body);
 
@@ -256,11 +264,15 @@ bool op::Subgraph::generate(const BlockedShapeVector& output_shapes, const Block
     for (auto op : m_body->get_ordered_ops()) {
         if (auto constant = as_type_ptr<opset1::Constant>(op)) {
             if (ngraph::shape_size(constant->get_shape()) != 1 && constant->get_shape() != Shape()) {
+                std::cout << constant << std::endl;
                 m_constants.push_back(constant);
             }
         }
     }
-    remark(1) << "Found " << m_constants.size() << " constants" << std::endl;
+    remark(11) << "Found " << m_constants.size() << " constants" << std::endl;
+    if (m_constants.size() != 0) {
+        throw ngraph_error("constant is founded during code generation flow... aborted!");
+    }
 
     // check resulting shapes are broadcastable to each other so can be scheduled
     work_size = m_body->output(0).get_shape();
@@ -268,7 +280,7 @@ bool op::Subgraph::generate(const BlockedShapeVector& output_shapes, const Block
         auto shape = m_body->output(k).get_shape();
 
         if (work_size.size() != shape.size()) {
-            throw ngraph_error("number of channels for all outputs of a snippet should match");
+            throw ngraph_error("rank for all outputs of a snippet should match");
         }
 
         for (int i = 0; i < work_size.size(); i++) {
