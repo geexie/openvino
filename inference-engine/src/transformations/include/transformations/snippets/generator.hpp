@@ -43,8 +43,14 @@ public:
 
     virtual code generate(std::shared_ptr<Function>& f) const = 0;
 
-    // FixMe: make prototype & module peramble/postamble to be a part of opset as well as more auxary things like function signature generation
+    // FIXME: make prototype & module peramble/postamble to be a part of opset as well as more auxary things like function signature generation
+    // How is to make it before parameters? should it be part of the module? like module is a functions + signature + return or what...
     virtual void generate_propotype(std::shared_ptr<ngraph::Function>& f) const = 0;
+    // FIXME: used to generate mable but can be anything make a part of opset as well
+    // How is to make it before parameters? should it be part of the module?
+    virtual void generate_return(std::shared_ptr<ngraph::Function>& f) const = 0;
+    virtual void generate_tile(std::shared_ptr<ngraph::Function>& f) const = 0;
+
     virtual void emit_module_enter() = 0;
     virtual void emit_module_exit() = 0;
 

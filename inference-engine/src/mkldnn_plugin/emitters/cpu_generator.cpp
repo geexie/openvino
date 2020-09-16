@@ -533,6 +533,9 @@ void CPUGenerator::emit(std::shared_ptr<opset1::Broadcast>& broadcast, RegInfo& 
 }
 
 void CPUGenerator::generate_propotype(std::shared_ptr<ngraph::Function>& f) const {
+    // Note: should it be also a pass?
+    h->preamble();
+
     auto params = f->get_parameters();
     auto results = f->get_results();
 
@@ -568,6 +571,8 @@ void CPUGenerator::generate_propotype(std::shared_ptr<ngraph::Function>& f) cons
     if (params.size()+results.size()+nConstants+1 > 8) {
         throw ngraph_error(std::string("snippet signature should not exceed 7 arguments. got") + std::to_string(params.size()+results.size()+nConstants));
     }
+
+    h->mov(p_table, l_table);
 }
 
 static auto getRegisters(std::shared_ptr<ngraph::Node>& n) -> std::pair<std::vector<size_t>, std::vector<size_t>> {
@@ -604,14 +609,11 @@ code CPUGenerator::generate(std::shared_ptr<ngraph::Function>& f) const {
     // sets up offsets to constant and temporals
     ngraph::pass::SetupStackTemporalsOffsetPass().run_on_function(f);
 
-    // Note: should it be also a pass?
-    h->preamble();
-#if 1
     generate_propotype(f);
 
-    Xbyak::Label l_table;
-    h->mov(p_table, l_table);
+    // FIXME: generate scalar analogy if needed and run another pass to replase loads with scalar loads so no need to pass ugly loopId == 0
 
+#if 1
     // configure tile variants
     size_t vlen = mkldnn::impl::cpu::cpu_isa_traits<mkldnn::impl::cpu::avx2>::vlen;
     std::array<size_t, 2> nloads   = {vlen / sizeof(float), 1};
@@ -643,6 +645,16 @@ code CPUGenerator::generate(std::shared_ptr<ngraph::Function>& f) const {
 
     h->L(for_body[nloads.size()]);
 #endif
+
+    generate_return(f);
+
+    return h->getCode();
+}
+
+void CPUGenerator::generate_tile(std::shared_ptr<ngraph::Function>& f) const {
+}
+
+void CPUGenerator::generate_return(std::shared_ptr<ngraph::Function>& f) const {
     h->postamble();
 #if 1
     h->align(64);
@@ -650,7 +662,6 @@ code CPUGenerator::generate(std::shared_ptr<ngraph::Function>& f) const {
 
     ngraph::pass::GenerateConstntTables(this).run_on_function(f);
 #endif
-    return h->getCode();
 }
 
 void CPUGenerator::emit_table(std::shared_ptr<op::Scalar>& op) const {
