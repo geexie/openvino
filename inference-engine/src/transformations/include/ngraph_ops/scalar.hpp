@@ -32,6 +32,11 @@ public:
     Scalar(const Scalar& other) : Constant(other) {}
     Scalar& operator=(const Scalar&) = delete;
     ~Scalar() override {}
+
+    std::shared_ptr<Node> clone_with_new_inputs(const OutputVector& new_args) const override {
+        check_new_args_count(this, new_args);
+        return std::make_shared<Scalar>(*this);
+    }
 };
 
 } // namespace op

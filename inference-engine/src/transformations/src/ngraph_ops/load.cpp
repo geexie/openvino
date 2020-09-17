@@ -10,9 +10,13 @@ using namespace std;
 using namespace ngraph;
 
 constexpr NodeTypeInfo op::Load::type_info;
+constexpr NodeTypeInfo op::ScalarLoad::type_info;
 
 op::Load::Load(const Output<Node>& x) : Op({x}) {
     constructor_validate_and_infer_types();
+}
+
+op::ScalarLoad::ScalarLoad(const Output<Node>& x) : Load({x}) {
 }
 
 bool op::Load::visit_attributes(AttributeVisitor& visitor) {

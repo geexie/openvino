@@ -6,7 +6,12 @@
 
 #include <ngraph/opsets/opset1.hpp>
 #include <ngraph/variant.hpp>
+#include <ngraph/rt_info.hpp>
+#include <ngraph/pattern/op/wrap_type.hpp>
+
 #include "ngraph_ops/scalar.hpp"
+#include "ngraph_ops/load.hpp"
+
 
 // Perhaps, it's better to call this pass setup constants
 // can this pass to be merged with actual constant generation somehow?
@@ -50,4 +55,18 @@ bool ngraph::pass::SetupStackTemporalsOffsetPass::run_on_function(std::shared_pt
     }
 
     return false;
+}
+
+ngraph::pass::ReplaceLoadsWithScalarLoads::ReplaceLoadsWithScalarLoads() {
+    this->add_matcher(std::make_shared<ngraph::pattern::Matcher>(
+        ngraph::pattern::wrap_type<ngraph::op::Load>(), "ReplaceLoadsWithScalarLoads"),
+            [this](ngraph::pattern::Matcher &m) {
+            auto root = m.get_match_root();
+            auto load = std::make_shared<ngraph::op::ScalarLoad> (root->input_value(0));
+            load->set_friendly_name(root->get_friendly_name());
+            ngraph::copy_runtime_info(root, load);
+            ngraph::replace_node(root, load);
+            return true;
+        },
+        PassProperty::CHANGE_DYNAMIC_STATE);
 }

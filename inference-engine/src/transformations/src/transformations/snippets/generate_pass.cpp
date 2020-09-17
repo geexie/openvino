@@ -6,6 +6,7 @@
 #include "transformations/snippets/generate_pass.hpp"
 #include "transformations/snippets/assign_registers_pass.hpp"
 #include "transformations/snippets/remarks.hpp"
+#include "transformations/snippets/generator.hpp"
 #include "transformations/rt_info/register_info.hpp"
 
 #include "ngraph_ops/scalar.hpp"
@@ -13,7 +14,7 @@
 
 #include <ngraph/pass/visualize_tree.hpp>
 
-auto getRegisters(std::shared_ptr<ngraph::Node>& n) -> std::pair<std::vector<size_t>, std::vector<size_t>> {
+auto getRegisters(std::shared_ptr<ngraph::Node>& n) -> ngraph::snippet::RegInfo {
     auto rt = n->get_rt_info();
 
     std::vector<size_t> rout;
@@ -34,44 +35,26 @@ auto getRegisters(std::shared_ptr<ngraph::Node>& n) -> std::pair<std::vector<siz
             }
         }
     }
+    for (auto r : rin) std::cout << r << " " ;
+    std::cout << std::endl;
+
+    for (auto r : rout) std::cout << r << " " ;
+    std::cout << std::endl;
     return std::make_pair(rin, rout);
 }
 
 bool ngraph::pass::GenerateCodePass::run_on_function(std::shared_ptr<Function> func) {
-#if 0
-    // usage
-    std::vector<std::shared_ptr<Emitter>> emitters;
-    // generation pass
-    for (auto n : f->get_ordered_ops()) {
-        if (jitters.find(n->get_type_info()) != jitters.end()) { // it shouldn't be here if we have complete
-            auto e = jitters[n->get_type_info()](n);
-            auto regs = getRegisters(n);
-            e->emit(regs.first, regs.second, {});
-
-            emitters.push_back(e);
-        } else {
-            //throw ngraph_error(std::string("Dear library writer, would you mind to implement another one jitter for ") + n->get_type_info().name);
-        }
-    }
-
-    // table setup pass
-    for (auto& e : emitters) {
-        e->emit_table();
-    }
-
-    // doesn't go any futher for now...
-    throw std::exception();
-#endif
-
     for (auto n : func->get_ordered_ops()) {
         auto regs = getRegisters(n);
 
-        remark(12) << (m_shouldLoadVectors ? "vector " : "scalar ")
-            << "code generation for " << n->get_friendly_name() << " of type " << n->get_type_info().name << std::endl;
+        remark(12) << (m_shouldLoadVectors ? "vector " : "scalar ")  << "code generation for " << n->get_friendly_name() << std::endl;
         remark(12) << "register precure " << regs.first.size() << " -> " << regs.second.size() << std::endl;
 
         if (auto op = std::dynamic_pointer_cast<opset1::Parameter>(n)) {
-            m_generator->emit(op, regs, m_shouldLoadVectors);
+            m_generator->emit(op, regs);
+        } else if (auto op = std::dynamic_pointer_cast<op::ScalarLoad>(n)) {
+            std::cout << "scalar load" << std::endl;
+            m_generator->emit(op, regs);
         } else if (auto op = std::dynamic_pointer_cast<op::Load>(n)) {
             m_generator->emit(op, regs, m_shouldLoadVectors);
         } else if (auto op = std::dynamic_pointer_cast<op::BroadcastLoad>(n)) {
@@ -79,8 +62,10 @@ bool ngraph::pass::GenerateCodePass::run_on_function(std::shared_ptr<Function> f
         } else if (auto op = std::dynamic_pointer_cast<opset1::Result>(n)) {
             m_generator->emit(op, regs, m_shouldLoadVectors);
         } else if (auto op = std::dynamic_pointer_cast<op::Scalar>(n)) {
-            m_generator->emit(op, regs, m_shouldLoadVectors);
+            m_generator->emit(op, regs);
         } else if (auto op = std::dynamic_pointer_cast<opset1::Constant>(n)) {
+            std::cout << "Constant" << std::endl;
+            throw 1;
             // skip
         } else if (auto op = std::dynamic_pointer_cast<opset1::Add>(n)) {
             m_generator->emit(op, regs);
@@ -130,8 +115,8 @@ bool ngraph::pass::GenerateCodePass::run_on_function(std::shared_ptr<Function> f
 
 bool ngraph::pass::GenerateCodePass::run_on_function(std::shared_ptr<Function> func) {
     for (auto n : func->get_ordered_ops()) {
-        auto regs = getRegisters(n);
-        this->jitters[n->get_type_info()](registers.in, registers.out, registers.pool);
+        auto registers = getRegisters(n);
+        this->jitters[n->get_type_info()](n).emit(registers.in, registers.out, registers.pool);
     }
 
     return false;

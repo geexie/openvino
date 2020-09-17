@@ -25,19 +25,33 @@ public:
     }
 };
 
-// alternative interface
-class Emitter {
+class CPUTargetMachine : public TargetMachine {
 public:
-    // jit_generator shouldnot be here, but have no idea for now
-    Emitter(mkldnn::impl::cpu::jit_generator* h_, const std::shared_ptr<ngraph::Node>& n) : h(h_) {
+    CPUTargetMachine(mkldnn::impl::cpu::jit_generator* h_, mkldnn::impl::cpu::cpu_isa_t host_isa_) : TargetMachine(), h(h_), host_isa(host_isa_) {
     }
 
-    virtual void emit(std::vector<size_t> in, std::vector<size_t> out, std::vector<size_t> pool) const = 0;
+    mkldnn::impl::cpu::jit_generator* h;
+    mkldnn::impl::cpu::cpu_isa_t host_isa;
+};
+
+class Emitter {
+public:
+    // jit_generator shouldnot be here, but have no idea for now, something like TargetMachine
+    Emitter(mkldnn::impl::cpu::jit_generator* h_, mkldnn::impl::cpu::cpu_isa_t host_isa_, const std::shared_ptr<ngraph::Node>& n)
+        : h(h_), host_isa(host_isa_) {
+    }
+
+    virtual void emit(const std::vector<size_t>& in,
+                      const std::vector<size_t>& out,
+                      const std::vector<size_t>& pool = {},
+                      const std::vector<size_t>& gpr  = {}) const = 0;
+
     virtual void emit_table() {
     }
 
 protected:
     mkldnn::impl::cpu::jit_generator* h;
+    mkldnn::impl::cpu::cpu_isa_t host_isa;
 };
 
 class TRANSFORMATIONS_API CPUGenerator : public Generator {
@@ -55,26 +69,24 @@ public:
 
     void emit(std::shared_ptr<op::Load>& op, RegInfo& registers, bool vec) const override;
     void emit(std::shared_ptr<op::BroadcastLoad>& op, RegInfo& registers, bool vec) const override;
-    void emit(std::shared_ptr<op::FakeBroadcast>& op, RegInfo& registers) const override;
-
-    void emit(std::shared_ptr<opset1::Parameter>& op, RegInfo& registers, bool vec) const override;
     void emit(std::shared_ptr<opset1::Result>& op, RegInfo& registers, bool vec) const override;
-    void emit(std::shared_ptr<op::Scalar>& op, RegInfo& registers, bool vec) const override;
 
+    void emit(std::shared_ptr<op::ScalarLoad>& op, RegInfo& registers) const override;
+
+    void emit(std::shared_ptr<op::FakeBroadcast>& op, RegInfo& registers) const override;
+    void emit(std::shared_ptr<opset1::Parameter>& op, RegInfo& registers) const override;
+    void emit(std::shared_ptr<op::Scalar>& op, RegInfo& registers) const override;
     void emit(std::shared_ptr<opset1::Add>& op, RegInfo& registers) const override;
     void emit(std::shared_ptr<opset1::Subtract>& op, RegInfo& registers) const override;
     void emit(std::shared_ptr<opset1::Multiply>& op, RegInfo& registers) const override;
     void emit(std::shared_ptr<opset1::Negative>& op, RegInfo& registers) const override;
     void emit(std::shared_ptr<opset1::Erf>& op, RegInfo& registers) const override;
     void emit(std::shared_ptr<opset1::Divide>& op, RegInfo& registers) const override;
-
     void emit(std::shared_ptr<opset1::Clamp>& op, RegInfo& registers) const override;
     void emit(std::shared_ptr<opset1::Relu>& op, RegInfo& registers) const override;
-
     void emit(std::shared_ptr<opset1::Sigmoid>& op, RegInfo& registers) const override;
     void emit(std::shared_ptr<opset1::SquaredDifference>& op, RegInfo& registers) const override;
     void emit(std::shared_ptr<opset1::Power>& op, RegInfo& registers) const override;
-
     void emit(std::shared_ptr<opset1::Broadcast>& broadcast, RegInfo& registers) const override;
     void emit(std::shared_ptr<opset1::PRelu>& op, RegInfo& registers) const override;
     void emit(std::shared_ptr<opset1::Tanh>& op, RegInfo& registers) const override;

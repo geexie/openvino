@@ -6,6 +6,7 @@
 
 #include <transformations_visibility.hpp>
 #include <ngraph/pass/pass.hpp>
+#include <ngraph/pass/graph_rewrite.hpp>
 
 // FIXME: this file should be rewritten once codegen is moved to jitters and global string-based constant table
 
@@ -18,6 +19,11 @@ public:
         set_property(PassProperty::REQUIRE_STATIC_SHAPE, true);
     }
     bool run_on_function(std::shared_ptr<ngraph::Function> function) override;
+};
+
+class TRANSFORMATIONS_API ReplaceLoadsWithScalarLoads: public ngraph::pass::GraphRewrite {
+public:
+    ReplaceLoadsWithScalarLoads();
 };
 
 } // namespace pass

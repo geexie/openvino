@@ -6,12 +6,15 @@
 
 class AddEmitter : public ngraph::snippet::Emitter {
 public:
-    AddEmitter(mkldnn::impl::cpu::jit_generator* h, const std::shared_ptr<ngraph::Node>& n)
-    : Emitter(h, n) {
+    AddEmitter(mkldnn::impl::cpu::jit_generator* h, mkldnn::impl::cpu::cpu_isa_t isa, const std::shared_ptr<ngraph::Node>& n)
+    : Emitter(h, isa, n) {
         remark(10) << "AddEmitter: " << n->get_friendly_name() << n->get_type_info().name << std::endl;
     }
 
-    void emit(std::vector<size_t> in, std::vector<size_t> out, std::vector<size_t> pool) const override {
+    void emit(const std::vector<size_t>& in,
+              const std::vector<size_t>& out,
+              const std::vector<size_t>& pool = {},
+              const std::vector<size_t>& gpr  = {}) const override {
         remark(10) << "  -> add" << std::endl;
         Xbyak::Ymm vmm_src0 = Xbyak::Ymm(in[0]);
         Xbyak::Ymm vmm_src1 = Xbyak::Ymm(in[1]);
@@ -23,12 +26,15 @@ public:
 
 class SubtractEmitter : public ngraph::snippet::Emitter{
 public:
-    SubtractEmitter(mkldnn::impl::cpu::jit_generator* h, const std::shared_ptr<ngraph::Node>& n)
-    : Emitter(h, n) {
+    SubtractEmitter(mkldnn::impl::cpu::jit_generator* h, mkldnn::impl::cpu::cpu_isa_t isa, const std::shared_ptr<ngraph::Node>& n)
+    : Emitter(h, isa, n) {
         remark(10) << "SubtractEmitter: " << n->get_friendly_name() << n->get_type_info().name << std::endl;
     }
 
-    void emit(std::vector<size_t> in, std::vector<size_t> out, std::vector<size_t> pool) const override {
+    void emit(const std::vector<size_t>& in,
+              const std::vector<size_t>& out,
+              const std::vector<size_t>& pool = {},
+              const std::vector<size_t>& gpr  = {}) const override {
         remark(10) << "  -> subtract" << std::endl;
         Xbyak::Ymm vmm_src0 = Xbyak::Ymm(in[0]);
         Xbyak::Ymm vmm_src1 = Xbyak::Ymm(in[1]);
@@ -40,12 +46,15 @@ public:
 
 class ErfEmitter : public ngraph::snippet::Emitter {
 public:
-    ErfEmitter(mkldnn::impl::cpu::jit_generator* h, const std::shared_ptr<ngraph::Node>& n)
-    : Emitter(h, n) {
+    ErfEmitter(mkldnn::impl::cpu::jit_generator* h, mkldnn::impl::cpu::cpu_isa_t isa, const std::shared_ptr<ngraph::Node>& n)
+    : Emitter(h, isa, n) {
         remark(10) << "ErfEmitter: " << n->get_friendly_name() << n->get_type_info().name << std::endl;
     }
 
-    void emit(std::vector<size_t> in, std::vector<size_t> out, std::vector<size_t> pool) const override {
+    void emit(const std::vector<size_t>& in,
+              const std::vector<size_t>& out,
+              const std::vector<size_t>& pool = {},
+              const std::vector<size_t>& gpr  = {}) const override {
         h->mov(p_table, table);
         // auto n = as_type_ptr<Node>(op);
         auto offset = p_table.getIdx();// getTableOffset(n);

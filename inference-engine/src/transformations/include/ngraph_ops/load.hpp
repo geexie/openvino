@@ -30,5 +30,16 @@ public:
 private:
 };
 
+class TRANSFORMATIONS_API ScalarLoad : public Load {
+public:
+    static constexpr NodeTypeInfo type_info{"ScalarLoad", 0};
+    const NodeTypeInfo& get_type_info() const override { return type_info; }
+
+    ScalarLoad(const Output<Node>& x);
+    ScalarLoad() = default;
+private:
+};
+
+
 } // namespace op
 } // namespace ngraph
