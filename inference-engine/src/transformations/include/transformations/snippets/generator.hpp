@@ -38,7 +38,7 @@ public:
     virtual void emit_module_enter() = 0;
     virtual void emit_module_exit() = 0;
 
-    virtual void emit(std::shared_ptr<op::Load>& op, RegInfo& registers, bool vec) const = 0;
+
     virtual void emit(std::shared_ptr<op::BroadcastLoad>& op, RegInfo& registers, bool vec) const = 0;
 
 
@@ -53,7 +53,9 @@ public:
     // FIXME: to jitters
     virtual void emit(std::shared_ptr<op::Scalar>& op, RegInfo& registers) const = 0;
     virtual void emit(std::shared_ptr<op::ScalarLoad>& op, RegInfo& registers) const = 0;
+    virtual void emit(std::shared_ptr<op::Load>& op, RegInfo& registers) const = 0;
     virtual void emit(std::shared_ptr<opset1::Parameter>& op, RegInfo& registers) const = 0;
+
     virtual void emit(std::shared_ptr<opset1::Add>& op, RegInfo& registers) const = 0;
     virtual void emit(std::shared_ptr<opset1::Subtract>& op, RegInfo& registers) const = 0;
     virtual void emit(std::shared_ptr<opset1::Multiply>& op, RegInfo& registers) const = 0;

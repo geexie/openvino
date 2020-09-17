@@ -56,7 +56,8 @@ bool ngraph::pass::GenerateCodePass::run_on_function(std::shared_ptr<Function> f
             std::cout << "scalar load" << std::endl;
             m_generator->emit(op, regs);
         } else if (auto op = std::dynamic_pointer_cast<op::Load>(n)) {
-            m_generator->emit(op, regs, m_shouldLoadVectors);
+            std::cout << "vector load" << std::endl;
+            m_generator->emit(op, regs);
         } else if (auto op = std::dynamic_pointer_cast<op::BroadcastLoad>(n)) {
             m_generator->emit(op, regs, m_shouldLoadVectors);
         } else if (auto op = std::dynamic_pointer_cast<opset1::Result>(n)) {

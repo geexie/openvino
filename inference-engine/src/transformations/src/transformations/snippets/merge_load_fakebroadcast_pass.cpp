@@ -16,6 +16,7 @@
 
 /// FIXME: In general it's not optimal to have one parameter comming with and without broadcast in the same subgraph
 /// unless we implement tile unrolling by vector width. In this case we would
+/// Assumption that every parameter loaded from memory only one should be correct so check if the is only one used of this load unless keep as is
 ngraph::pass::MergeLoadFakeBroadcastToBroadcastLoadPass::MergeLoadFakeBroadcastToBroadcastLoadPass() {
     auto param_pattern = ngraph::pattern::wrap_type<ngraph::opset1::Parameter>();
     auto load_pattern = std::make_shared<ngraph::op::Load>(param_pattern);

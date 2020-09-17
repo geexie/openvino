@@ -67,10 +67,10 @@ public:
     void emit_module_enter() override;
     void emit_module_exit() override;
 
-    void emit(std::shared_ptr<op::Load>& op, RegInfo& registers, bool vec) const override;
     void emit(std::shared_ptr<op::BroadcastLoad>& op, RegInfo& registers, bool vec) const override;
     void emit(std::shared_ptr<opset1::Result>& op, RegInfo& registers, bool vec) const override;
 
+    void emit(std::shared_ptr<op::Load>& op, RegInfo& registers) const override;
     void emit(std::shared_ptr<op::ScalarLoad>& op, RegInfo& registers) const override;
 
     void emit(std::shared_ptr<op::FakeBroadcast>& op, RegInfo& registers) const override;

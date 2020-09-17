@@ -84,13 +84,15 @@ void CPUGenerator::emit(std::shared_ptr<op::ScalarLoad>& load, RegInfo& register
     Xbyak::Xmm xmm_src0 = Xbyak::Xmm(registers.second[0]);
     h->movss(xmm_src0, h->ptr[in_reg]);
 
+    // FIXME: something fundamentally wrong with this condition, it addresses the case if
     if (*load->get_input_shape(0).rbegin() != 1)
         h->add(in_reg, sizeof(float));
 
     remark(11) << " -> scalar_load (" << (registers.second[0]) << ") " << std::endl;
 }
 
-void CPUGenerator::emit(std::shared_ptr<op::Load>& load, RegInfo& registers, bool vec) const {
+// Assumption that every parameter loaded from memory only one should be correct
+void CPUGenerator::emit(std::shared_ptr<op::Load>& load, RegInfo& registers) const {
     auto& rt = load->get_rt_info();
     size_t ea = 0;
     if (auto rinfo = rt["effectiveAddress"]) {
@@ -103,17 +105,12 @@ void CPUGenerator::emit(std::shared_ptr<op::Load>& load, RegInfo& registers, boo
 
     Xbyak::Reg64 in_reg(reg64_tmp_start + ea);
 
-    if (vec /*&& (*load->get_input_shape(0).rbegin() != 1)*/) {
-        Xbyak::Ymm vmm_src0 = Xbyak::Ymm(registers.second[0]);
-        h->uni_vmovups(vmm_src0, h->ptr[in_reg]);
-    } else {
-        Xbyak::Xmm xmm_src0 = Xbyak::Xmm(registers.second[0]);
-        h->movss(xmm_src0, h->ptr[in_reg]);
-    }
+    Xbyak::Ymm vmm_src0 = Xbyak::Ymm(registers.second[0]);
+    h->uni_vmovups(vmm_src0, h->ptr[in_reg]);
 
     if (*load->get_input_shape(0).rbegin() != 1) {
         remark(11) << "adding post increment" << std::endl;
-        h->add(in_reg, vec ? mkldnn::impl::cpu::cpu_isa_traits<mkldnn::impl::cpu::avx2>::vlen : sizeof(float));
+        h->add(in_reg, mkldnn::impl::cpu::cpu_isa_traits<mkldnn::impl::cpu::avx2>::vlen);
     }
 
     remark(11) << " -> load (" << (registers.second[0]) << ") " << std::endl;

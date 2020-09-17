@@ -129,6 +129,7 @@ auto reset_broacast_config(const std::shared_ptr<ngraph::Node>& op) -> void {
 // adds explicit broadcasts if needed
 // ToDO: this indeed make model not reshapable, need to come up with more clever way to insert fake broadcast,
 // well on the other hand, if we replace scalar constant with Scalar op / or ShapeOf, we could have broadcasts that are reshapable
+// FIXME: generate FakeBroadcast if and only if broadcast is done by w dimension
 ngraph::pass::InsertExplicitFakeBroadcastPass::InsertExplicitFakeBroadcastPass() {
      ngraph::graph_rewrite_callback callback = [this](ngraph::pattern::Matcher &m) {
         auto root = m.get_match_root();
