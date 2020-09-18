@@ -11,6 +11,9 @@
 namespace ngraph {
 namespace op {
 
+/// ====================================================================================================================================================
+/// This only generated for broadcasting by W as leas varying dimension for unblocked cases and the second one for blocked
+/// ====================================================================================================================================================
 class TRANSFORMATIONS_API BroadcastLoad : public Op {
 public:
     static constexpr NodeTypeInfo type_info{"BroadcastLoad", 0};

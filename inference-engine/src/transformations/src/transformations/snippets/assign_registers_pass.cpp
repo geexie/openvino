@@ -21,12 +21,12 @@ bool ngraph::pass::AssignRegistersPass::run_on_function(std::shared_ptr<Function
     for (auto n : f->get_ordered_ops()) {
         auto& rt = n->get_rt_info();
         // nothing to do for function signature
-        if (std::dynamic_pointer_cast<opset1::Parameter>(n)) {
+        if (std::dynamic_pointer_cast<opset1::Parameter>(n) || std::dynamic_pointer_cast<opset1::Result>(n)) {
             continue;
         }
 
         // store only effective address
-        if (auto result = std::dynamic_pointer_cast<opset1::Result>(n)) {
+        if (auto result = std::dynamic_pointer_cast<op::Store>(n)) {
             auto ea = static_cast<int64_t>(f->get_result_index(result) + f->get_parameters().size());
             rt["effectiveAddress"] = std::make_shared<VariantWrapper<int64_t>>(VariantWrapper<int64_t>(ea));
             continue;

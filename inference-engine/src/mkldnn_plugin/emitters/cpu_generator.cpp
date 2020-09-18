@@ -24,7 +24,7 @@
 using namespace std;
 using namespace ngraph;
 
-auto getTableOffset(std::shared_ptr<ngraph::Node>& n) -> size_t {
+auto getTableOffset(const std::shared_ptr<ngraph::Node>& n) -> size_t {
     auto rt = n->get_rt_info();
 
     size_t rout = 0;;
@@ -34,6 +34,17 @@ auto getTableOffset(std::shared_ptr<ngraph::Node>& n) -> size_t {
     }
 
     return rout;
+}
+
+auto getEA(const std::shared_ptr<ngraph::Node>& n) -> size_t {
+    auto& rt = n->get_rt_info();
+    size_t ea = 0;
+    if (auto rinfo = rt["effectiveAddress"]) {
+        ea = ngraph::as_type_ptr<ngraph::VariantWrapper<int64_t>>(rinfo)->get();
+    } else {
+        throw ngraph_error("effective address for Load generation cannot be determined");
+    }
+    return ea;
 }
 
 CPUGenerator::CPUGenerator() : h(new jit_snippet()) {
@@ -57,58 +68,37 @@ CPUGenerator::CPUGenerator() : h(new jit_snippet()) {
     std::cout << jitters.size() << " @@@@@@@@ !!!!!!!!!" << std::endl;
 }
 
-void CPUGenerator::emit_module_enter() {
-    h->preamble();
-}
-void CPUGenerator::emit_module_exit() {
-    h->postamble();
-}
-
-void CPUGenerator::emit(std::shared_ptr<opset1::Parameter>& param, RegInfo& registers) const {
+void CPUGenerator::emit(const std::shared_ptr<opset1::Parameter>& param, RegInfo& registers) const {
     remark(1) << "  -> node is a parameter with " << param->outputs().size() << " outputs"  << std::endl;
 }
 
-void CPUGenerator::emit(std::shared_ptr<op::ScalarLoad>& load, RegInfo& registers) const {
-    auto& rt = load->get_rt_info();
-    size_t ea = 0;
-    if (auto rinfo = rt["effectiveAddress"]) {
-        ea = ngraph::as_type_ptr<ngraph::VariantWrapper<int64_t>>(rinfo)->get();
-    } else {
-        throw ngraph_error("effective address for Load generation cannot be determined");
-    }
-
-    remark(11) << "  -> node is a scalar_load " << ea << " " << *load->get_input_shape(0).rbegin() << std::endl;
+void CPUGenerator::emit(const std::shared_ptr<op::ScalarLoad>& op, RegInfo& registers) const {
+    auto ea = getEA(op);
+    remark(11) << "  -> node is a scalar_load " << ea << " " << *op->get_input_shape(0).rbegin() << std::endl;
 
     Xbyak::Reg64 in_reg(reg64_tmp_start + ea);
-
     Xbyak::Xmm xmm_src0 = Xbyak::Xmm(registers.second[0]);
     h->movss(xmm_src0, h->ptr[in_reg]);
 
     // FIXME: something fundamentally wrong with this condition, it addresses the case if
-    if (*load->get_input_shape(0).rbegin() != 1)
+    if (*op->get_input_shape(0).rbegin() != 1) {
+        remark(11) << "adding post increment" << std::endl;
         h->add(in_reg, sizeof(float));
+    }
 
     remark(11) << " -> scalar_load (" << (registers.second[0]) << ") " << std::endl;
 }
 
 // Assumption that every parameter loaded from memory only one should be correct
-void CPUGenerator::emit(std::shared_ptr<op::Load>& load, RegInfo& registers) const {
-    auto& rt = load->get_rt_info();
-    size_t ea = 0;
-    if (auto rinfo = rt["effectiveAddress"]) {
-        ea = ngraph::as_type_ptr<ngraph::VariantWrapper<int64_t>>(rinfo)->get();
-    } else {
-        throw ngraph_error("effective address for Load generation cannot be determined");
-    }
-
-    remark(11) << "  -> node is a load " << ea << " " << *load->get_input_shape(0).rbegin() << std::endl;
+void CPUGenerator::emit(const std::shared_ptr<op::Load>& op, RegInfo& registers) const {
+    auto ea = getEA(op);
+    remark(11) << "  -> node is a load " << ea << " " << *op->get_input_shape(0).rbegin() << std::endl;
 
     Xbyak::Reg64 in_reg(reg64_tmp_start + ea);
-
     Xbyak::Ymm vmm_src0 = Xbyak::Ymm(registers.second[0]);
     h->uni_vmovups(vmm_src0, h->ptr[in_reg]);
 
-    if (*load->get_input_shape(0).rbegin() != 1) {
+    if (*op->get_input_shape(0).rbegin() != 1) {
         remark(11) << "adding post increment" << std::endl;
         h->add(in_reg, mkldnn::impl::cpu::cpu_isa_traits<mkldnn::impl::cpu::avx2>::vlen);
     }
@@ -116,66 +106,69 @@ void CPUGenerator::emit(std::shared_ptr<op::Load>& load, RegInfo& registers) con
     remark(11) << " -> load (" << (registers.second[0]) << ") " << std::endl;
 }
 
-void CPUGenerator::emit(std::shared_ptr<op::BroadcastLoad>& load, RegInfo& registers, bool vec) const {
-    auto& rt = load->get_rt_info();
-    size_t ea = 0;
-    if (auto rinfo = rt["effectiveAddress"]) {
-        ea = ngraph::as_type_ptr<ngraph::VariantWrapper<int64_t>>(rinfo)->get();
-    } else {
-        throw ngraph_error("effective address for Load generation cannot be determined");
-    }
-
-    auto should_broadcast_w = !!load->is_broadcast(load->get_output_shape(0).size() - 1);
+void CPUGenerator::emit(const std::shared_ptr<op::BroadcastLoad>& op, RegInfo& registers, bool vec) const {
+    auto ea = getEA(op);
+    auto should_broadcast_w = !!op->is_broadcast(op->get_output_shape(0).size() - 1);
 
     remark(11) << "  -> node is a broadcast load " << ea << " " << should_broadcast_w << std::endl;
 
-    Xbyak::Reg64 in_reg(reg64_tmp_start + ea);
-
-    if (vec) {
-        Xbyak::Ymm vmm_src0 = Xbyak::Ymm(registers.second[0]);
-        if (should_broadcast_w) {
+    if (should_broadcast_w) {
+        Xbyak::Reg64 in_reg(reg64_tmp_start + ea);
+        if (vec) {
+            Xbyak::Ymm vmm_src0 = Xbyak::Ymm(registers.second[0]);
             h->uni_vbroadcastss(vmm_src0, h->ptr[in_reg]);
         } else {
-            h->uni_vmovups(vmm_src0, h->ptr[in_reg]);
+            Xbyak::Xmm xmm_src0 = Xbyak::Xmm(registers.second[0]);
+            h->movss(xmm_src0, h->ptr[in_reg]);
         }
     } else {
-        Xbyak::Xmm xmm_src0 = Xbyak::Xmm(registers.second[0]);
-        h->movss(xmm_src0, h->ptr[in_reg]);
-    }
+        Xbyak::Reg64 in_reg(reg64_tmp_start + ea);
+        if (vec) {
+            Xbyak::Ymm vmm_src0 = Xbyak::Ymm(registers.second[0]);
+            h->uni_vmovups(vmm_src0, h->ptr[in_reg]);
+        } else {
+            Xbyak::Xmm xmm_src0 = Xbyak::Xmm(registers.second[0]);
+            h->movss(xmm_src0, h->ptr[in_reg]);
+        }
 
-    // Note: increment is needed if we cross line boundary over linearized tiles (currently disabled)
-    if (!should_broadcast_w && *load->get_input_shape(0).rbegin() != 1) {
-        remark(11) << "adding post increment" << std::endl;
-        h->add(in_reg, vec ? mkldnn::impl::cpu::cpu_isa_traits<mkldnn::impl::cpu::avx2>::vlen : sizeof(float));
+        // Note: increment is needed if we cross line boundary over linearized tiles (currently disabled)
+        if (*op->get_input_shape(0).rbegin() != 1) {
+            remark(11) << "adding post increment" << std::endl;
+            h->add(in_reg, vec ? mkldnn::impl::cpu::cpu_isa_traits<mkldnn::impl::cpu::avx2>::vlen : sizeof(float));
+        }
     }
 
     remark(11) << "    -> broadcast (" << (registers.second[0]) << ")" << std::endl;
 }
 
-void CPUGenerator::emit(std::shared_ptr<opset1::Result>& result, RegInfo& registers, bool vec) const {
-    auto& rt = result->get_rt_info();
-    size_t ea = 0;
-    if (auto rinfo = rt["effectiveAddress"]) {
-        ea = ngraph::as_type_ptr<ngraph::VariantWrapper<int64_t>>(rinfo)->get();
-    } else {
-        throw ngraph_error("effective address for Load generation cannot be determined");
-    }
+void CPUGenerator::emit(const std::shared_ptr<opset1::Result>& result, RegInfo& registers) const {
+}
 
-    remark(11) << "  -> node is a result " << std::endl;
+void CPUGenerator::emit(const std::shared_ptr<op::Store>& op, RegInfo& registers) const {
+    auto ea = getEA(op);
+    remark(11) << "  -> node is a store " << std::endl;
+
     Xbyak::Reg64 out_reg(reg64_tmp_start + ea);
-    if (vec) {
-        Xbyak::Ymm vmm_src0 = Xbyak::Ymm(registers.first[0]);
-        h->uni_vmovups(h->ptr[out_reg], vmm_src0);
-    } else {
-        Xbyak::Xmm xmm_src0 = Xbyak::Xmm(registers.first[0]);
-        h->movss(h->ptr[out_reg], xmm_src0);
-    }
-    h->add(out_reg, vec ? mkldnn::impl::cpu::cpu_isa_traits<mkldnn::impl::cpu::avx2>::vlen : sizeof(float));
+    Xbyak::Ymm vmm_src0 = Xbyak::Ymm(registers.first[0]);
+    h->uni_vmovups(h->ptr[out_reg], vmm_src0);
+    h->add(out_reg, mkldnn::impl::cpu::cpu_isa_traits<mkldnn::impl::cpu::avx2>::vlen);
 
     remark(11) << "    -> store (" << registers.first[0] << ")" << std::endl;
 }
 
-void CPUGenerator::emit(std::shared_ptr<opset1::Add>& add, RegInfo& registers) const {
+void CPUGenerator::emit(const std::shared_ptr<op::ScalarStore>& op, RegInfo& registers) const {
+    auto ea = getEA(op);
+    remark(11) << "  -> node is a scalar_store " << std::endl;
+
+    Xbyak::Reg64 out_reg(reg64_tmp_start + ea);
+    Xbyak::Xmm xmm_src0 = Xbyak::Xmm(registers.first[0]);
+    h->movss(h->ptr[out_reg], xmm_src0);
+    h->add(out_reg, sizeof(float));
+
+    remark(11) << "    -> scalar_store (" << registers.first[0] << ")" << std::endl;
+}
+
+void CPUGenerator::emit(const std::shared_ptr<opset1::Add>& add, RegInfo& registers) const {
     remark(11) << "  -> add" << std::endl;
 
     Xbyak::Ymm vmm_src0 = Xbyak::Ymm(registers.first[0]);
@@ -187,7 +180,7 @@ void CPUGenerator::emit(std::shared_ptr<opset1::Add>& add, RegInfo& registers) c
     remark(11) << "    -> " << registers.second[0] << " = add (" << registers.first[0] << ", " << registers.first[1] << ")" << std::endl;
 }
 
-void CPUGenerator::emit(std::shared_ptr<opset1::Subtract>& sub, RegInfo& registers) const {
+void CPUGenerator::emit(const std::shared_ptr<opset1::Subtract>& sub, RegInfo& registers) const {
     remark(11) << "  -> sub" << std::endl;
 
     Xbyak::Ymm vmm_src0 = Xbyak::Ymm(registers.first[0]);
@@ -199,7 +192,7 @@ void CPUGenerator::emit(std::shared_ptr<opset1::Subtract>& sub, RegInfo& registe
     remark(11) << "    -> " << registers.second[0] << " = sub (" << registers.first[0] << ", " << registers.first[1] << ")" << std::endl;
 }
 
-void CPUGenerator::emit(std::shared_ptr<opset1::Multiply>& mul, RegInfo& registers) const {
+void CPUGenerator::emit(const std::shared_ptr<opset1::Multiply>& mul, RegInfo& registers) const {
     remark(11) << "  -> mul" << std::endl;
 
     Xbyak::Ymm vmm_src0 = Xbyak::Ymm(registers.first[0]);
@@ -211,7 +204,7 @@ void CPUGenerator::emit(std::shared_ptr<opset1::Multiply>& mul, RegInfo& registe
     remark(11) << "    -> " << registers.second[0] << " = mul (" << registers.first[0] << ", " << registers.first[1] << ")" << std::endl;
 }
 
-void CPUGenerator::emit(std::shared_ptr<opset1::Negative>& neg, RegInfo& registers) const {
+void CPUGenerator::emit(const std::shared_ptr<opset1::Negative>& neg, RegInfo& registers) const {
     remark(11) << "  -> neg" << std::endl;
 
     Xbyak::Ymm vmm_src0 = Xbyak::Ymm(registers.first[0]);
@@ -223,7 +216,7 @@ void CPUGenerator::emit(std::shared_ptr<opset1::Negative>& neg, RegInfo& registe
     remark(11) << "    -> " << registers.second[0] << " = neg (" << registers.first[0] << ")" << std::endl;
 }
 
-void CPUGenerator::emit(std::shared_ptr<opset1::Divide>& op, RegInfo& registers) const {
+void CPUGenerator::emit(const std::shared_ptr<opset1::Divide>& op, RegInfo& registers) const {
     remark(11) << "  -> div" << std::endl;
 
     Xbyak::Ymm vmm_src0 = Xbyak::Ymm(registers.first[0]);
@@ -235,7 +228,7 @@ void CPUGenerator::emit(std::shared_ptr<opset1::Divide>& op, RegInfo& registers)
     remark(11) << "    -> " << registers.second[0] << " = div (" << registers.first[0] << ", " << registers.first[1] << ")" << std::endl;
 }
 
-void CPUGenerator::emit(std::shared_ptr<opset1::Clamp>& op, RegInfo& registers) const {
+void CPUGenerator::emit(const std::shared_ptr<opset1::Clamp>& op, RegInfo& registers) const {
     remark(11) << "  -> clamp" << std::endl;
     // auto x = as_type_ptr<Node>(op);
     auto x = std::dynamic_pointer_cast<Node>(op);
@@ -252,7 +245,7 @@ void CPUGenerator::emit(std::shared_ptr<opset1::Clamp>& op, RegInfo& registers) 
     remark(1) << "    -> " << registers.second[0] << " = clamp (" << registers.first[0] << ")" << std::endl;
 }
 
-void CPUGenerator::emit(std::shared_ptr<opset1::Relu>& op, RegInfo& registers) const {
+void CPUGenerator::emit(const std::shared_ptr<opset1::Relu>& op, RegInfo& registers) const {
     remark(11) << "  -> relu" << std::endl;
     Xbyak::Ymm vmm_src0 = Xbyak::Ymm(registers.first[0]);
     Xbyak::Ymm vmm_dst0 = Xbyak::Ymm(registers.second[0]);
@@ -265,7 +258,7 @@ void CPUGenerator::emit(std::shared_ptr<opset1::Relu>& op, RegInfo& registers) c
     remark(11) << "    -> " << registers.second[0] << " = relu (" << registers.first[0] << ")" << std::endl;
 }
 
-void CPUGenerator::emit(std::shared_ptr<opset1::SquaredDifference>& op, RegInfo& registers) const {
+void CPUGenerator::emit(const std::shared_ptr<opset1::SquaredDifference>& op, RegInfo& registers) const {
     remark(11) << "  -> diff" << std::endl;
     Xbyak::Ymm vmm_src0 = Xbyak::Ymm(registers.first[0]);
     Xbyak::Ymm vmm_src1 = Xbyak::Ymm(registers.first[1]);
@@ -277,7 +270,7 @@ void CPUGenerator::emit(std::shared_ptr<opset1::SquaredDifference>& op, RegInfo&
     remark(11) << "    -> " << registers.second[0] << " = diff (" << registers.first[0] << "," << registers.first[1] << ")" << std::endl;
 }
 
-void CPUGenerator::emit(std::shared_ptr<opset1::Power>& op, RegInfo& registers) const {
+void CPUGenerator::emit(const std::shared_ptr<opset1::Power>& op, RegInfo& registers) const {
     remark(11) << "  -> pow" << std::endl;
     Xbyak::Ymm vmm_src = Xbyak::Ymm(registers.first[0]);
     Xbyak::Ymm vmm_dst = Xbyak::Ymm(registers.second[0]);
@@ -317,7 +310,7 @@ void CPUGenerator::emit(std::shared_ptr<opset1::Power>& op, RegInfo& registers) 
     remark(11) << "    -> " << registers.second[0] << " = pow (" << registers.first[0] << "," << registers.first[1] << ")" << std::endl;
 }
 
-void CPUGenerator::emit(std::shared_ptr<opset1::Sigmoid>& op, RegInfo& registers) const {
+void CPUGenerator::emit(const std::shared_ptr<opset1::Sigmoid>& op, RegInfo& registers) const {
     remark(11) << "  -> sigmoid" << std::endl;
     // auto x = as_type_ptr<Node>(op);
     auto x = std::dynamic_pointer_cast<Node>(op);
@@ -401,7 +394,7 @@ void CPUGenerator::emit(std::shared_ptr<opset1::Sigmoid>& op, RegInfo& registers
 }
 
 // FixMe: It should be Scalar instead!!
-void CPUGenerator::emit(std::shared_ptr<op::Scalar>& constant, RegInfo& registers) const {
+void CPUGenerator::emit(const std::shared_ptr<op::Scalar>& constant, RegInfo& registers) const {
     if (constant->outputs().size() != 1) {
         throw ngraph_error("constant with more than 1 output is not supported");
     }
@@ -424,7 +417,7 @@ void CPUGenerator::emit(std::shared_ptr<op::Scalar>& constant, RegInfo& register
 }
 
 // Erf function approximation without tanh
-void CPUGenerator::emit(std::shared_ptr<opset1::Erf>& op, RegInfo& registers) const {
+void CPUGenerator::emit(const std::shared_ptr<opset1::Erf>& op, RegInfo& registers) const {
     // auto n = as_type_ptr<Node>(op);
     auto n = std::dynamic_pointer_cast<Node>(op);
     auto offset = getTableOffset(n);
@@ -499,7 +492,7 @@ void CPUGenerator::emit(std::shared_ptr<opset1::Erf>& op, RegInfo& registers) co
     remark(11) << "    -> " << registers.second[0] << " = erf (" << registers.first[0] << ")" << std::endl;
 }
 
-void CPUGenerator::emit(std::shared_ptr<opset1::PRelu>& op, RegInfo& registers) const {
+void CPUGenerator::emit(const std::shared_ptr<opset1::PRelu>& op, RegInfo& registers) const {
     remark(11) << "  -> prelu " << std::endl;
 
     Xbyak::Ymm vmm_src0 = Xbyak::Ymm(registers.first[0]);
@@ -515,7 +508,7 @@ void CPUGenerator::emit(std::shared_ptr<opset1::PRelu>& op, RegInfo& registers) 
     remark(11) << "    -> " << registers.second[0] << " = prelu (" << registers.first[0] << "," << registers.first[1] << ")" << std::endl;
 }
 
-void CPUGenerator::emit(std::shared_ptr<opset1::Tanh>& op, RegInfo& registers) const {
+void CPUGenerator::emit(const std::shared_ptr<opset1::Tanh>& op, RegInfo& registers) const {
     remark(11) << "  -> tanh " << std::endl;
     throw 1;
 
@@ -528,7 +521,7 @@ void CPUGenerator::emit(std::shared_ptr<opset1::Tanh>& op, RegInfo& registers) c
     remark(11) << "    -> " << registers.second[0] << " = tanh (" << registers.first[0] << ")" << std::endl;
 }
 
-void CPUGenerator::emit(std::shared_ptr<op::FakeBroadcast>& broadcast, RegInfo& registers) const {
+void CPUGenerator::emit(const std::shared_ptr<op::FakeBroadcast>& broadcast, RegInfo& registers) const {
     // Fix me: make it bypass nop
     remark(11) << "broadcast " << broadcast->get_input_shape(0) << " -> " << broadcast->get_output_shape(0)
     << (*broadcast->get_input_shape(0).rbegin() != *broadcast->get_output_shape(0).rbegin() ? "BROADCAST X" : "BROADCAST YZW") << std::endl;
@@ -545,7 +538,7 @@ void CPUGenerator::emit(std::shared_ptr<op::FakeBroadcast>& broadcast, RegInfo& 
     remark(11) << "    -> " << registers.second[0] << " = broadcast (" << registers.first[0] << ")" << std::endl;
 }
 
-void CPUGenerator::emit(std::shared_ptr<opset1::Broadcast>& broadcast, RegInfo& registers) const {
+void CPUGenerator::emit(const std::shared_ptr<opset1::Broadcast>& broadcast, RegInfo& registers) const {
     // Fix me: make it bypass nop
     remark(11) << "broadcast " << broadcast->get_input_shape(0) << " -> " << broadcast->get_output_shape(0) << std::endl;
 
@@ -598,37 +591,6 @@ void CPUGenerator::generate_propotype(std::shared_ptr<ngraph::Function>& f) cons
     }
 
     h->mov(p_table, l_table);
-}
-
-static auto getRegisters(std::shared_ptr<ngraph::Node>& n) -> std::pair<std::vector<size_t>, std::vector<size_t>> {
-    auto rt = n->get_rt_info();
-
-    std::vector<size_t> rout;
-    if (auto rinfo = rt["reginfo"]) {
-        auto reginfo = ngraph::as_type_ptr<ngraph::VariantWrapper<std::vector<size_t>>>(rinfo)->get();
-        for (auto reg : reginfo) {
-            rout.push_back(reg);
-        }
-    }
-
-    std::vector<size_t> rin;
-    for (auto input : n->inputs()) {
-        auto rt = input.get_source_output().get_node_shared_ptr()->get_rt_info();
-        if (auto rinfo = rt["reginfo"]) {
-            auto reginfo = ngraph::as_type_ptr<ngraph::VariantWrapper<std::vector<size_t>>>(rinfo)->get();
-            for (auto reg : reginfo) {
-                rin.push_back(reg);
-            }
-        }
-    }
-
-    for (auto r : rin) std::cout << r << " " ;
-    std::cout << std::endl;
-
-    for (auto r : rout) std::cout << r << " " ;
-    std::cout << std::endl;
-
-    return std::make_pair(rin, rout);
 }
 
 code CPUGenerator::generate(std::shared_ptr<ngraph::Function>& f) const {
@@ -711,7 +673,7 @@ void CPUGenerator::generate_return(std::shared_ptr<ngraph::Function>& f) const {
 #endif
 }
 
-void CPUGenerator::emit_table(std::shared_ptr<op::Scalar>& op) const {
+void CPUGenerator::emit_table(const std::shared_ptr<op::Scalar>& op) const {
     auto out_shape = op->output(0).get_tensor().get_shape();
     if (out_shape == Shape() || ngraph::shape_size(out_shape) == 1) {
         remark(11) << "pugging constant " << op->cast_vector<float>()[0] << " to the stack" << std::endl;
@@ -719,7 +681,7 @@ void CPUGenerator::emit_table(std::shared_ptr<op::Scalar>& op) const {
     }
 }
 
-void CPUGenerator::emit_table(std::shared_ptr<opset1::Erf>& op) const {
+void CPUGenerator::emit_table(const std::shared_ptr<opset1::Erf>& op) const {
     h->dd(mkldnn::impl::cpu::float2int(2.86f));                   // 0
     h->dd(mkldnn::impl::cpu::float2int(1.00f));// 0x3f800000      // 1
 
@@ -739,14 +701,14 @@ void CPUGenerator::emit_table(std::shared_ptr<opset1::Erf>& op) const {
     h->dd(0x7fffffff);                                            // 13
 }
 
-void CPUGenerator::emit_table(std::shared_ptr<opset1::Clamp>& op) const {
+void CPUGenerator::emit_table(const std::shared_ptr<opset1::Clamp>& op) const {
     remark(11) << "pugging Clamp min " << op->get_min() << " to the stack" << std::endl;
     h->dd(mkldnn::impl::cpu::float2int(static_cast<float>(op->get_min())));
     remark(11) << "pugging Clamp max " << op->get_max() << " to the stack" << std::endl;
     h->dd(mkldnn::impl::cpu::float2int(static_cast<float>(op->get_max())));
 }
 
-void CPUGenerator::emit_table(std::shared_ptr<opset1::Sigmoid>& op) const {
+void CPUGenerator::emit_table(const std::shared_ptr<opset1::Sigmoid>& op) const {
     size_t vlen = 8*sizeof(float);
     const unsigned int cvals[] = {
             0x3f800000, // [0] 1.0f

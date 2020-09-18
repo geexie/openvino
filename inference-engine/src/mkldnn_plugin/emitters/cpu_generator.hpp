@@ -60,41 +60,44 @@ public:
     ~CPUGenerator() = default;
 
     code generate(std::shared_ptr<Function>& f) const override;
+
     void generate_propotype(std::shared_ptr<ngraph::Function>& f) const override;
-    void generate_return(std::shared_ptr<ngraph::Function>& f) const override;
     void generate_tile(std::shared_ptr<ngraph::Function>& f) const override;
+    void generate_return(std::shared_ptr<ngraph::Function>& f) const override;
 
-    void emit_module_enter() override;
-    void emit_module_exit() override;
+    void emit(const std::shared_ptr<op::BroadcastLoad>& op, RegInfo& registers, bool vec) const override;
+    void emit(const std::shared_ptr<op::FakeBroadcast>& op, RegInfo& registers) const override;
+    void emit(const std::shared_ptr<opset1::Broadcast>& broadcast, RegInfo& registers) const override;
 
-    void emit(std::shared_ptr<op::BroadcastLoad>& op, RegInfo& registers, bool vec) const override;
-    void emit(std::shared_ptr<opset1::Result>& op, RegInfo& registers, bool vec) const override;
+    void emit(const std::shared_ptr<op::Scalar>& op, RegInfo& registers) const override;
 
-    void emit(std::shared_ptr<op::Load>& op, RegInfo& registers) const override;
-    void emit(std::shared_ptr<op::ScalarLoad>& op, RegInfo& registers) const override;
+    void emit(const std::shared_ptr<op::Load>& op, RegInfo& registers) const override;
+    void emit(const std::shared_ptr<op::ScalarLoad>& op, RegInfo& registers) const override;
 
-    void emit(std::shared_ptr<op::FakeBroadcast>& op, RegInfo& registers) const override;
-    void emit(std::shared_ptr<opset1::Parameter>& op, RegInfo& registers) const override;
-    void emit(std::shared_ptr<op::Scalar>& op, RegInfo& registers) const override;
-    void emit(std::shared_ptr<opset1::Add>& op, RegInfo& registers) const override;
-    void emit(std::shared_ptr<opset1::Subtract>& op, RegInfo& registers) const override;
-    void emit(std::shared_ptr<opset1::Multiply>& op, RegInfo& registers) const override;
-    void emit(std::shared_ptr<opset1::Negative>& op, RegInfo& registers) const override;
-    void emit(std::shared_ptr<opset1::Erf>& op, RegInfo& registers) const override;
-    void emit(std::shared_ptr<opset1::Divide>& op, RegInfo& registers) const override;
-    void emit(std::shared_ptr<opset1::Clamp>& op, RegInfo& registers) const override;
-    void emit(std::shared_ptr<opset1::Relu>& op, RegInfo& registers) const override;
-    void emit(std::shared_ptr<opset1::Sigmoid>& op, RegInfo& registers) const override;
-    void emit(std::shared_ptr<opset1::SquaredDifference>& op, RegInfo& registers) const override;
-    void emit(std::shared_ptr<opset1::Power>& op, RegInfo& registers) const override;
-    void emit(std::shared_ptr<opset1::Broadcast>& broadcast, RegInfo& registers) const override;
-    void emit(std::shared_ptr<opset1::PRelu>& op, RegInfo& registers) const override;
-    void emit(std::shared_ptr<opset1::Tanh>& op, RegInfo& registers) const override;
+    void emit(const std::shared_ptr<op::Store>& op, RegInfo& registers) const override;
+    void emit(const std::shared_ptr<op::ScalarStore>& op, RegInfo& registers) const override;
 
-    void emit_table(std::shared_ptr<op::Scalar>& constant) const override;
-    void emit_table(std::shared_ptr<opset1::Erf>& op) const override;
-    void emit_table(std::shared_ptr<opset1::Clamp>& op) const override;
-    void emit_table(std::shared_ptr<opset1::Sigmoid>& op) const override;
+    void emit(const std::shared_ptr<opset1::Parameter>& op, RegInfo& registers) const override;
+    void emit(const std::shared_ptr<opset1::Result>& op, RegInfo& registers) const override;
+
+    void emit(const std::shared_ptr<opset1::Add>& op, RegInfo& registers) const override;
+    void emit(const std::shared_ptr<opset1::Subtract>& op, RegInfo& registers) const override;
+    void emit(const std::shared_ptr<opset1::Multiply>& op, RegInfo& registers) const override;
+    void emit(const std::shared_ptr<opset1::Negative>& op, RegInfo& registers) const override;
+    void emit(const std::shared_ptr<opset1::Erf>& op, RegInfo& registers) const override;
+    void emit(const std::shared_ptr<opset1::Divide>& op, RegInfo& registers) const override;
+    void emit(const std::shared_ptr<opset1::Clamp>& op, RegInfo& registers) const override;
+    void emit(const std::shared_ptr<opset1::Relu>& op, RegInfo& registers) const override;
+    void emit(const std::shared_ptr<opset1::Sigmoid>& op, RegInfo& registers) const override;
+    void emit(const std::shared_ptr<opset1::SquaredDifference>& op, RegInfo& registers) const override;
+    void emit(const std::shared_ptr<opset1::Power>& op, RegInfo& registers) const override;
+    void emit(const std::shared_ptr<opset1::PRelu>& op, RegInfo& registers) const override;
+    void emit(const std::shared_ptr<opset1::Tanh>& op, RegInfo& registers) const override;
+
+    void emit_table(const std::shared_ptr<op::Scalar>& constant) const override;
+    void emit_table(const std::shared_ptr<opset1::Erf>& op) const override;
+    void emit_table(const std::shared_ptr<opset1::Clamp>& op) const override;
+    void emit_table(const std::shared_ptr<opset1::Sigmoid>& op) const override;
 
 private:
     std::unique_ptr<mkldnn::impl::cpu::jit_generator> h;

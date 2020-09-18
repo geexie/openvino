@@ -178,8 +178,11 @@ void op::Subgraph::canonicalize(const BlockedShapeVector& output_shapes, const B
                 throw ngraph::ngraph_error("changes in presision. Is it legal??");
             }
 
-            m_body->replace_parameter(i, std::make_shared<opset1::Parameter>(std::get<2>(input_shapes[i]), std::get<0>(input_shapes[i])));
-            remark(11) << "parameter" << i << " shape " << param->get_shape() << " reshaping to " << std::get<0>(input_shapes[i]) << std::endl;
+            if (param->get_shape().size() != std::get<0>(input_shapes[i]).size()) {
+                m_body->replace_parameter(i, std::make_shared<op::/*Blocked*/Parameter>(std::get<2>(input_shapes[i]), std::get<0>(input_shapes[i])));
+                remark(11) << "parameter" << i << " shape " << param->get_shape()
+                           << " reshaping to blocked parameter with shape " << std::get<0>(input_shapes[i]) << std::endl;
+            }
         }
     }
 

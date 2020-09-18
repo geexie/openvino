@@ -35,4 +35,15 @@ ngraph::pass::InsertExplicitLoadsPass::InsertExplicitLoadsPass() {
             return rewritten;
         },
         PassProperty::CHANGE_DYNAMIC_STATE);
+
+    this->add_matcher(std::make_shared<ngraph::pattern::Matcher>(
+        ngraph::pattern::wrap_type<ngraph::opset1::Result>(), "InsertExplicitLoads"),
+            [this](ngraph::pattern::Matcher &m) {
+            auto root = m.get_match_root();
+            auto store = std::make_shared<ngraph::op::Store> (root->input_value(0));
+            ngraph::copy_runtime_info(root, store);
+            root->set_argument(0, store);
+            return true;
+        },
+        PassProperty::CHANGE_DYNAMIC_STATE);
 }

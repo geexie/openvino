@@ -14,60 +14,31 @@
 
 #include <ngraph/pass/visualize_tree.hpp>
 
-auto getRegisters(std::shared_ptr<ngraph::Node>& n) -> ngraph::snippet::RegInfo {
-    auto rt = n->get_rt_info();
-
-    std::vector<size_t> rout;
-    if (auto rinfo = rt["reginfo"]) {
-        auto reginfo = ngraph::as_type_ptr<ngraph::VariantWrapper<std::vector<size_t>>>(rinfo)->get();
-        for (auto reg : reginfo) {
-            rout.push_back(reg);
-        }
-    }
-
-    std::vector<size_t> rin;
-    for (auto input : n->inputs()) {
-        auto rt = input.get_source_output().get_node_shared_ptr()->get_rt_info();
-        if (auto rinfo = rt["reginfo"]) {
-            auto reginfo = ngraph::as_type_ptr<ngraph::VariantWrapper<std::vector<size_t>>>(rinfo)->get();
-            for (auto reg : reginfo) {
-                rin.push_back(reg);
-            }
-        }
-    }
-    for (auto r : rin) std::cout << r << " " ;
-    std::cout << std::endl;
-
-    for (auto r : rout) std::cout << r << " " ;
-    std::cout << std::endl;
-    return std::make_pair(rin, rout);
-}
-
 bool ngraph::pass::GenerateCodePass::run_on_function(std::shared_ptr<Function> func) {
     for (auto n : func->get_ordered_ops()) {
-        auto regs = getRegisters(n);
+        auto regs = ngraph::snippet::getRegisters(n);
 
         remark(12) << (m_shouldLoadVectors ? "vector " : "scalar ")  << "code generation for " << n->get_friendly_name() << std::endl;
         remark(12) << "register precure " << regs.first.size() << " -> " << regs.second.size() << std::endl;
 
-        if (auto op = std::dynamic_pointer_cast<opset1::Parameter>(n)) {
-            m_generator->emit(op, regs);
-        } else if (auto op = std::dynamic_pointer_cast<op::ScalarLoad>(n)) {
-            std::cout << "scalar load" << std::endl;
-            m_generator->emit(op, regs);
-        } else if (auto op = std::dynamic_pointer_cast<op::Load>(n)) {
-            std::cout << "vector load" << std::endl;
-            m_generator->emit(op, regs);
-        } else if (auto op = std::dynamic_pointer_cast<op::BroadcastLoad>(n)) {
+        if (auto op = std::dynamic_pointer_cast<op::BroadcastLoad>(n)) {
             m_generator->emit(op, regs, m_shouldLoadVectors);
         } else if (auto op = std::dynamic_pointer_cast<opset1::Result>(n)) {
-            m_generator->emit(op, regs, m_shouldLoadVectors);
+            m_generator->emit(op, regs);
+        } else if (auto op = std::dynamic_pointer_cast<opset1::Parameter>(n)) {
+            m_generator->emit(op, regs);
+        } else if (auto op = std::dynamic_pointer_cast<op::ScalarStore>(n)) {
+            m_generator->emit(op, regs);
+        } else if (auto op = std::dynamic_pointer_cast<op::Store>(n)) {
+            m_generator->emit(op, regs);
+        } else if (auto op = std::dynamic_pointer_cast<op::ScalarLoad>(n)) {
+            m_generator->emit(op, regs);
+        } else if (auto op = std::dynamic_pointer_cast<op::Load>(n)) {
+            m_generator->emit(op, regs);
         } else if (auto op = std::dynamic_pointer_cast<op::Scalar>(n)) {
             m_generator->emit(op, regs);
         } else if (auto op = std::dynamic_pointer_cast<opset1::Constant>(n)) {
-            std::cout << "Constant" << std::endl;
-            throw 1;
-            // skip
+            throw ngraph::ngraph_error(std::string("not implemented operation ") + n->get_type_info().name);
         } else if (auto op = std::dynamic_pointer_cast<opset1::Add>(n)) {
             m_generator->emit(op, regs);
         } else if (auto op = std::dynamic_pointer_cast<opset1::Subtract>(n)) {
@@ -87,7 +58,6 @@ bool ngraph::pass::GenerateCodePass::run_on_function(std::shared_ptr<Function> f
         } else if (auto op = std::dynamic_pointer_cast<op::FakeBroadcast>(n)) {
             m_generator->emit(op, regs);
         } else if (auto op = std::dynamic_pointer_cast<op::Nop>(n)) {
-            // m_generator->emit(op, regs);
             throw ngraph::ngraph_error(std::string("not implemented operation ") + n->get_type_info().name);
         } else if (auto op = std::dynamic_pointer_cast<opset1::Power>(n)) {
             m_generator->emit(op, regs);
@@ -98,13 +68,12 @@ bool ngraph::pass::GenerateCodePass::run_on_function(std::shared_ptr<Function> f
         } else if (auto op = std::dynamic_pointer_cast<opset1::Relu>(n)) {
             m_generator->emit(op, regs);
         } else if (auto op = std::dynamic_pointer_cast<opset1::Concat>(n)) { // some limitation on control flow rather than actual code
-            // m_generator->emit(op, regs);
             throw ngraph::ngraph_error(std::string("not implemented operation ") + n->get_type_info().name);
         } else if (auto op = std::dynamic_pointer_cast<opset1::Sigmoid>(n)) {
             m_generator->emit(op, regs);
         } else {
             std::cout << "Warning " << std::string("unknown operation ") << n->get_type_info().name << std::endl;
-            // throw ngraph::ngraph_error(std::string("unknown operation ") + n->get_type_info().name);
+            throw ngraph::ngraph_error(std::string("unknown operation ") + n->get_type_info().name);
         }
     }
 
