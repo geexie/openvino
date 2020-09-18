@@ -18,6 +18,11 @@ bool ngraph::pass::GenerateCodePass::run_on_function(std::shared_ptr<Function> f
     for (auto n : func->get_ordered_ops()) {
         auto regs = ngraph::snippet::getRegisters(n);
 
+        if (m_generator->jitters.find(n->get_type_info()) != m_generator->jitters.end()) {
+            m_generator->jitters[n->get_type_info()](n)->emit(regs.first, regs.second);
+            continue;
+        }
+
         remark(12) << "code generation for " << n->get_friendly_name() << "register precure " << regs.first.size() << " -> " << regs.second.size() << std::endl;
 
         if (auto op = std::dynamic_pointer_cast<op::BroadcastLoad>(n)) {
@@ -72,16 +77,3 @@ bool ngraph::pass::GenerateCodePass::run_on_function(std::shared_ptr<Function> f
 
     return false;
 }
-
-#if 0
-// std::map<ngraph::NodeTypeInfo, std::function<void(std::vector<size_t>, std::vector<size_t>, std::vector<size_t>)>> jitters;
-
-bool ngraph::pass::GenerateCodePass::run_on_function(std::shared_ptr<Function> func) {
-    for (auto n : func->get_ordered_ops()) {
-        auto registers = getRegisters(n);
-        this->jitters[n->get_type_info()](n).emit(registers.in, registers.out, registers.pool);
-    }
-
-    return false;
-}
-#endif

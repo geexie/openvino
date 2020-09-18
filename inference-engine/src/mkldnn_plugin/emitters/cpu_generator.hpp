@@ -34,11 +34,11 @@ public:
     mkldnn::impl::cpu::cpu_isa_t host_isa;
 };
 
-class Emitter {
+class JitEmitter : public Emitter {
 public:
     // jit_generator shouldnot be here, but have no idea for now, something like TargetMachine
-    Emitter(mkldnn::impl::cpu::jit_generator* h_, mkldnn::impl::cpu::cpu_isa_t host_isa_, const std::shared_ptr<ngraph::Node>& n)
-        : h(h_), host_isa(host_isa_) {
+    JitEmitter(mkldnn::impl::cpu::jit_generator* h_, mkldnn::impl::cpu::cpu_isa_t host_isa_, const std::shared_ptr<ngraph::Node>& n)
+        : Emitter(n), h(h_), host_isa(host_isa_) {
     }
 
     virtual void emit(const std::vector<size_t>& in,
@@ -107,8 +107,6 @@ private:
     Xbyak::Reg64 p_table { Xbyak::util::rax }; // get from somewhere
 
     mutable Xbyak::Label l_table;
-
-    std::map<ngraph::DiscreteTypeInfo, std::function<std::shared_ptr<Emitter>(std::shared_ptr<ngraph::Node>)>> jitters;
 };
 
 } // namespace snippet

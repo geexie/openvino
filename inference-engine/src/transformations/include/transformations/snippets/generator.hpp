@@ -19,6 +19,22 @@ using RegInfo = std::pair<std::vector<size_t>, std::vector<size_t>>;
 class TargetMachine {
 };
 
+class Emitter {
+public:
+    // jit_generator shouldnot be here, but have no idea for now, something like TargetMachine
+    Emitter(const std::shared_ptr<ngraph::Node>& n) {
+    }
+
+    virtual void emit(const std::vector<size_t>& in,
+                      const std::vector<size_t>& out,
+                      const std::vector<size_t>& pool = {},
+                      const std::vector<size_t>& gpr  = {}) const = 0;
+
+    // FIXME: remove in future
+    virtual void emit_table() {
+    }
+};
+
 // Generator interface
 class TRANSFORMATIONS_API Generator {
 public:
@@ -76,6 +92,9 @@ public:
     virtual void emit_table(const std::shared_ptr<opset1::Erf>& op) const = 0;
     virtual void emit_table(const std::shared_ptr<opset1::Clamp>& op) const = 0;
     virtual void emit_table(const std::shared_ptr<opset1::Sigmoid>& op) const = 0;
+
+public:
+    mutable std::map<const ngraph::DiscreteTypeInfo, std::function<std::shared_ptr<Emitter>(std::shared_ptr<ngraph::Node>)>> jitters;
 };
 
 auto getRegisters(std::shared_ptr<ngraph::Node>& n) -> ngraph::snippet::RegInfo;

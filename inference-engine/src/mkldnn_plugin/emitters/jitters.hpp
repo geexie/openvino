@@ -4,10 +4,10 @@
 
 #pragma once
 
-class AddEmitter : public ngraph::snippet::Emitter {
+class AddEmitter : public ngraph::snippet::JitEmitter {
 public:
     AddEmitter(mkldnn::impl::cpu::jit_generator* h, mkldnn::impl::cpu::cpu_isa_t isa, const std::shared_ptr<ngraph::Node>& n)
-    : Emitter(h, isa, n) {
+    : JitEmitter(h, isa, n) {
         remark(10) << "AddEmitter: " << n->get_friendly_name() << n->get_type_info().name << std::endl;
     }
 
@@ -20,14 +20,14 @@ public:
         Xbyak::Ymm vmm_src1 = Xbyak::Ymm(in[1]);
         Xbyak::Ymm vmm_dst  = Xbyak::Ymm(out[0]);
         h->uni_vaddps(vmm_dst, vmm_src0, vmm_src1);
-        remark(10) <<"    -> " << in[0] << " = add (" << in[0] << ", " << out[1] << ")" << std::endl;
+        remark(10) <<"    -> " << out[0] << " = add (" << in[0] << ", " << in[1] << ")" << std::endl;
     }
 };
 
-class SubtractEmitter : public ngraph::snippet::Emitter{
+class SubtractEmitter : public ngraph::snippet::JitEmitter{
 public:
     SubtractEmitter(mkldnn::impl::cpu::jit_generator* h, mkldnn::impl::cpu::cpu_isa_t isa, const std::shared_ptr<ngraph::Node>& n)
-    : Emitter(h, isa, n) {
+    : JitEmitter(h, isa, n) {
         remark(10) << "SubtractEmitter: " << n->get_friendly_name() << n->get_type_info().name << std::endl;
     }
 
@@ -40,14 +40,26 @@ public:
         Xbyak::Ymm vmm_src1 = Xbyak::Ymm(in[1]);
         Xbyak::Ymm vmm_dst  = Xbyak::Ymm(out[0]);
         h->uni_vsubps(vmm_dst, vmm_src0, vmm_src1);
-        remark(10) <<"    -> " << in[0] << " = subtract (" << in[0] << ", " << out[1] << ")" << std::endl;
+        remark(10) <<"    -> " << out[0] << " = subtract (" << in[0] << ", " << in[1] << ")" << std::endl;
     }
 };
 
-class ErfEmitter : public ngraph::snippet::Emitter {
+static inline auto getTableOffset(const std::shared_ptr<ngraph::Node>& n) -> size_t {
+    auto rt = n->get_rt_info();
+
+    size_t rout = 0;;
+    if (auto rinfo = rt["stackinfo"]) {
+        auto reginfo = ngraph::as_type_ptr<ngraph::VariantWrapper<int64_t>>(rinfo)->get();
+        rout = static_cast<size_t>(reginfo);
+    }
+
+    return rout;
+}
+
+class ErfEmitter : public ngraph::snippet::JitEmitter {
 public:
     ErfEmitter(mkldnn::impl::cpu::jit_generator* h, mkldnn::impl::cpu::cpu_isa_t isa, const std::shared_ptr<ngraph::Node>& n)
-    : Emitter(h, isa, n) {
+    : JitEmitter(h, isa, n), offset(getTableOffset(n)) {
         remark(10) << "ErfEmitter: " << n->get_friendly_name() << n->get_type_info().name << std::endl;
     }
 
@@ -55,9 +67,8 @@ public:
               const std::vector<size_t>& out,
               const std::vector<size_t>& pool = {},
               const std::vector<size_t>& gpr  = {}) const override {
-        h->mov(p_table, table);
-        // auto n = as_type_ptr<Node>(op);
-        auto offset = p_table.getIdx();// getTableOffset(n);
+        // FIXME: get from target machine conefig in future
+        Xbyak::Reg64 p_table { Xbyak::util::rax };
         remark(10) << "  -> erf " << offset << std::endl;
 
         auto regIDx = out[0];
@@ -128,9 +139,6 @@ public:
 
     void emit_table() override {
         remark(10) << "generating table for Erf" << std::endl;
-        h->align(64);
-        h->L(table); // L disallow this function be const qualified
-
         h->dd(mkldnn::impl::cpu::float2int(2.86f));                   // 0
         h->dd(mkldnn::impl::cpu::float2int(1.00f));// 0x3f800000      // 1
 
@@ -151,6 +159,5 @@ public:
     }
 
 private:
-    Xbyak::Label table;
-    const Xbyak::Reg64 p_table { Xbyak::util::rax }; // get from somewhere
+    size_t offset;
 };

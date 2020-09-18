@@ -24,17 +24,17 @@
 using namespace std;
 using namespace ngraph;
 
-auto getTableOffset(const std::shared_ptr<ngraph::Node>& n) -> size_t {
-    auto rt = n->get_rt_info();
+// auto getTableOffset(const std::shared_ptr<ngraph::Node>& n) -> size_t {
+//     auto rt = n->get_rt_info();
 
-    size_t rout = 0;;
-    if (auto rinfo = rt["stackinfo"]) {
-        auto reginfo = ngraph::as_type_ptr<ngraph::VariantWrapper<int64_t>>(rinfo)->get();
-        rout = static_cast<size_t>(reginfo);
-    }
+//     size_t rout = 0;;
+//     if (auto rinfo = rt["stackinfo"]) {
+//         auto reginfo = ngraph::as_type_ptr<ngraph::VariantWrapper<int64_t>>(rinfo)->get();
+//         rout = static_cast<size_t>(reginfo);
+//     }
 
-    return rout;
-}
+//     return rout;
+// }
 
 auto getEA(const std::shared_ptr<ngraph::Node>& n) -> size_t {
     auto& rt = n->get_rt_info();
@@ -50,6 +50,7 @@ auto getEA(const std::shared_ptr<ngraph::Node>& n) -> size_t {
 CPUGenerator::CPUGenerator() : h(new jit_snippet()) {
     reg64_tmp_start = h->r8.getIdx();
 
+    // FIXME: it's going to be created with `NGRAPH_OP` macro or even pass manager like add mather, but cannot deside for now
     jitters[ngraph::opset1::Add().get_type_info()]
     = [this](const std::shared_ptr<ngraph::Node>& n) -> std::shared_ptr<Emitter> {
         return std::shared_ptr<Emitter>(new AddEmitter(h.get(), mkldnn::impl::cpu::avx2, n));
