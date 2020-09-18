@@ -106,37 +106,20 @@ void CPUGenerator::emit(const std::shared_ptr<op::Load>& op, RegInfo& registers)
     remark(11) << " -> load (" << (registers.second[0]) << ") " << std::endl;
 }
 
-void CPUGenerator::emit(const std::shared_ptr<op::BroadcastLoad>& op, RegInfo& registers, bool vec) const {
+void CPUGenerator::emit(const std::shared_ptr<op::BroadcastLoad>& op, RegInfo& registers) const {
     auto ea = getEA(op);
     auto should_broadcast_w = !!op->is_broadcast(op->get_output_shape(0).size() - 1);
+    if (!should_broadcast_w) {
+        throw ngraph_error("unsupported broadcast dimension ");
+    }
 
     remark(11) << "  -> node is a broadcast load " << ea << " " << should_broadcast_w << std::endl;
 
-    if (should_broadcast_w) {
-        Xbyak::Reg64 in_reg(reg64_tmp_start + ea);
-        if (vec) {
-            Xbyak::Ymm vmm_src0 = Xbyak::Ymm(registers.second[0]);
-            h->uni_vbroadcastss(vmm_src0, h->ptr[in_reg]);
-        } else {
-            Xbyak::Xmm xmm_src0 = Xbyak::Xmm(registers.second[0]);
-            h->movss(xmm_src0, h->ptr[in_reg]);
-        }
-    } else {
-        Xbyak::Reg64 in_reg(reg64_tmp_start + ea);
-        if (vec) {
-            Xbyak::Ymm vmm_src0 = Xbyak::Ymm(registers.second[0]);
-            h->uni_vmovups(vmm_src0, h->ptr[in_reg]);
-        } else {
-            Xbyak::Xmm xmm_src0 = Xbyak::Xmm(registers.second[0]);
-            h->movss(xmm_src0, h->ptr[in_reg]);
-        }
-
-        // Note: increment is needed if we cross line boundary over linearized tiles (currently disabled)
-        if (*op->get_input_shape(0).rbegin() != 1) {
-            remark(11) << "adding post increment" << std::endl;
-            h->add(in_reg, vec ? mkldnn::impl::cpu::cpu_isa_traits<mkldnn::impl::cpu::avx2>::vlen : sizeof(float));
-        }
-    }
+    Xbyak::Reg64 in_reg(reg64_tmp_start + ea);
+    Xbyak::Ymm vmm_src0 = Xbyak::Ymm(registers.second[0]);
+    // In doesn't really matter if we broadcast or `movss` for vector tails so keep only one version for `BroadcastLoad`,
+    // key point here is not to add post-increment, it might be fixed by some other approach in future
+    h->uni_vbroadcastss(vmm_src0, h->ptr[in_reg]);
 
     remark(11) << "    -> broadcast (" << (registers.second[0]) << ")" << std::endl;
 }
@@ -619,8 +602,6 @@ code CPUGenerator::generate(std::shared_ptr<ngraph::Function>& f) const {
         remark(13) << "op " << qqq++ << " " << op->get_friendly_name() << " (" << op->get_type_name() << ") " << op << std::endl;
     }
 
-    // FIXME: generate scalar analogy if needed and run another pass to replase loads with scalar loads so no need to pass ugly loopId == 0
-
 #if 1
     // configure tile variants
     size_t vlen = mkldnn::impl::cpu::cpu_isa_traits<mkldnn::impl::cpu::avx2>::vlen;
@@ -643,7 +624,7 @@ code CPUGenerator::generate(std::shared_ptr<ngraph::Function>& f) const {
 
         // loop_body()
         h->L(for_body[loopId]); {
-            ngraph::pass::GenerateCodePass(this, loopId == 0).run_on_function(bodies[loopId]);
+            ngraph::pass::GenerateCodePass(this).run_on_function(bodies[loopId]);
 
             // loop_advance()
             h->sub(amount, nloads[loopId]);

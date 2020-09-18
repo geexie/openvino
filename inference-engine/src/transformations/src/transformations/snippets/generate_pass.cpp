@@ -18,11 +18,10 @@ bool ngraph::pass::GenerateCodePass::run_on_function(std::shared_ptr<Function> f
     for (auto n : func->get_ordered_ops()) {
         auto regs = ngraph::snippet::getRegisters(n);
 
-        remark(12) << (m_shouldLoadVectors ? "vector " : "scalar ")  << "code generation for " << n->get_friendly_name() << std::endl;
-        remark(12) << "register precure " << regs.first.size() << " -> " << regs.second.size() << std::endl;
+        remark(12) << "code generation for " << n->get_friendly_name() << "register precure " << regs.first.size() << " -> " << regs.second.size() << std::endl;
 
         if (auto op = std::dynamic_pointer_cast<op::BroadcastLoad>(n)) {
-            m_generator->emit(op, regs, m_shouldLoadVectors);
+            m_generator->emit(op, regs);
         } else if (auto op = std::dynamic_pointer_cast<opset1::Result>(n)) {
             m_generator->emit(op, regs);
         } else if (auto op = std::dynamic_pointer_cast<opset1::Parameter>(n)) {
@@ -37,8 +36,6 @@ bool ngraph::pass::GenerateCodePass::run_on_function(std::shared_ptr<Function> f
             m_generator->emit(op, regs);
         } else if (auto op = std::dynamic_pointer_cast<op::Scalar>(n)) {
             m_generator->emit(op, regs);
-        } else if (auto op = std::dynamic_pointer_cast<opset1::Constant>(n)) {
-            throw ngraph::ngraph_error(std::string("not implemented operation ") + n->get_type_info().name);
         } else if (auto op = std::dynamic_pointer_cast<opset1::Add>(n)) {
             m_generator->emit(op, regs);
         } else if (auto op = std::dynamic_pointer_cast<opset1::Subtract>(n)) {
@@ -57,8 +54,6 @@ bool ngraph::pass::GenerateCodePass::run_on_function(std::shared_ptr<Function> f
             m_generator->emit(op, regs);
         } else if (auto op = std::dynamic_pointer_cast<op::FakeBroadcast>(n)) {
             m_generator->emit(op, regs);
-        } else if (auto op = std::dynamic_pointer_cast<op::Nop>(n)) {
-            throw ngraph::ngraph_error(std::string("not implemented operation ") + n->get_type_info().name);
         } else if (auto op = std::dynamic_pointer_cast<opset1::Power>(n)) {
             m_generator->emit(op, regs);
         } else if (auto op = std::dynamic_pointer_cast<opset1::SquaredDifference>(n)) {
@@ -67,8 +62,6 @@ bool ngraph::pass::GenerateCodePass::run_on_function(std::shared_ptr<Function> f
             m_generator->emit(op, regs);
         } else if (auto op = std::dynamic_pointer_cast<opset1::Relu>(n)) {
             m_generator->emit(op, regs);
-        } else if (auto op = std::dynamic_pointer_cast<opset1::Concat>(n)) { // some limitation on control flow rather than actual code
-            throw ngraph::ngraph_error(std::string("not implemented operation ") + n->get_type_info().name);
         } else if (auto op = std::dynamic_pointer_cast<opset1::Sigmoid>(n)) {
             m_generator->emit(op, regs);
         } else {

@@ -41,7 +41,6 @@ public:
     // FIXME: exclude extension form opset to use Standart broadcast
     // FIXME: vec shouldn't be here in such an explicit way, but be need to generate tables once for a pass so cannot duplicate body
     // generate it like normal compilers usually do in future
-    virtual void emit(const std::shared_ptr<op::BroadcastLoad>& op, RegInfo& registers, bool vec) const = 0;
     virtual void emit(const std::shared_ptr<opset1::Broadcast>& broadcast, RegInfo& registers) const = 0;
     virtual void emit(const std::shared_ptr<op::FakeBroadcast>& op, RegInfo& registers) const = 0;
 
@@ -50,6 +49,7 @@ public:
 
     virtual void emit(const std::shared_ptr<op::Load>& op, RegInfo& registers) const = 0;
     virtual void emit(const std::shared_ptr<op::ScalarLoad>& op, RegInfo& registers) const = 0;
+    virtual void emit(const std::shared_ptr<op::BroadcastLoad>& op, RegInfo& registers) const = 0;
 
     virtual void emit(const std::shared_ptr<op::Store>& op, RegInfo& registers) const = 0;
     virtual void emit(const std::shared_ptr<op::ScalarStore>& op, RegInfo& registers) const = 0;
@@ -79,6 +79,7 @@ public:
 };
 
 auto getRegisters(std::shared_ptr<ngraph::Node>& n) -> ngraph::snippet::RegInfo;
+
 
 } // namespace snippet
 using snippet::Generator;

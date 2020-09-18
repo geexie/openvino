@@ -65,7 +65,6 @@ public:
     void generate_tile(std::shared_ptr<ngraph::Function>& f) const override;
     void generate_return(std::shared_ptr<ngraph::Function>& f) const override;
 
-    void emit(const std::shared_ptr<op::BroadcastLoad>& op, RegInfo& registers, bool vec) const override;
     void emit(const std::shared_ptr<op::FakeBroadcast>& op, RegInfo& registers) const override;
     void emit(const std::shared_ptr<opset1::Broadcast>& broadcast, RegInfo& registers) const override;
 
@@ -73,6 +72,7 @@ public:
 
     void emit(const std::shared_ptr<op::Load>& op, RegInfo& registers) const override;
     void emit(const std::shared_ptr<op::ScalarLoad>& op, RegInfo& registers) const override;
+    void emit(const std::shared_ptr<op::BroadcastLoad>& op, RegInfo& registers) const override;
 
     void emit(const std::shared_ptr<op::Store>& op, RegInfo& registers) const override;
     void emit(const std::shared_ptr<op::ScalarStore>& op, RegInfo& registers) const override;

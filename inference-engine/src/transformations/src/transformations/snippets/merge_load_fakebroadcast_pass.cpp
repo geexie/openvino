@@ -43,11 +43,14 @@ ngraph::pass::MergeLoadFakeBroadcastToBroadcastLoadPass::MergeLoadFakeBroadcastT
                 }
             }
             broadcastload->set_broadcast_info(bct);
-            // broadcastload->set_friendly_name(root->get_friendly_name());
-            ngraph::copy_runtime_info(root, broadcastload);
-            ngraph::replace_node(root, broadcastload);
-
-            return true;
+            if (broadcastload->is_broadcast(outshape.size()-1)) {
+                // broadcastload->set_friendly_name(root->get_friendly_name());
+                ngraph::copy_runtime_info(root, broadcastload);
+                ngraph::replace_node(root, broadcastload);
+                return true;
+            } else {
+                return false;
+            }
         },
         PassProperty::CHANGE_DYNAMIC_STATE);
 }
