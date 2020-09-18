@@ -52,6 +52,10 @@ public:
 protected:
     mkldnn::impl::cpu::jit_generator* h;
     mkldnn::impl::cpu::cpu_isa_t host_isa;
+
+    int reg64_tmp_start { 8 }; // R8, R9, R10, R11, R12, R13, R14, R15 inputs+outputs+1
+    Xbyak::Reg64 param  { mkldnn::impl::cpu::abi_param1 }; // RDI
+    Xbyak::Reg64 p_table { Xbyak::util::rax }; // get from somewhere
 };
 
 class TRANSFORMATIONS_API CPUGenerator : public Generator {

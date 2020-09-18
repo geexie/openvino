@@ -24,29 +24,6 @@
 using namespace std;
 using namespace ngraph;
 
-// auto getTableOffset(const std::shared_ptr<ngraph::Node>& n) -> size_t {
-//     auto rt = n->get_rt_info();
-
-//     size_t rout = 0;;
-//     if (auto rinfo = rt["stackinfo"]) {
-//         auto reginfo = ngraph::as_type_ptr<ngraph::VariantWrapper<int64_t>>(rinfo)->get();
-//         rout = static_cast<size_t>(reginfo);
-//     }
-
-//     return rout;
-// }
-
-auto getEA(const std::shared_ptr<ngraph::Node>& n) -> size_t {
-    auto& rt = n->get_rt_info();
-    size_t ea = 0;
-    if (auto rinfo = rt["effectiveAddress"]) {
-        ea = ngraph::as_type_ptr<ngraph::VariantWrapper<int64_t>>(rinfo)->get();
-    } else {
-        throw ngraph_error("effective address for Load generation cannot be determined");
-    }
-    return ea;
-}
-
 CPUGenerator::CPUGenerator() : h(new jit_snippet()) {
     reg64_tmp_start = h->r8.getIdx();
 
@@ -66,6 +43,93 @@ CPUGenerator::CPUGenerator() : h(new jit_snippet()) {
         return std::shared_ptr<Emitter>(new ErfEmitter(h.get(), mkldnn::impl::cpu::avx2, n));
     };
 
+    jitters[ngraph::opset1::Parameter().get_type_info()]
+    = [this](const std::shared_ptr<ngraph::Node>& n) -> std::shared_ptr<Emitter> {
+        return std::shared_ptr<Emitter>(new NopEmitter(h.get(), mkldnn::impl::cpu::avx2, n));
+    };
+
+    jitters[ngraph::opset1::Result().get_type_info()]
+    = [this](const std::shared_ptr<ngraph::Node>& n) -> std::shared_ptr<Emitter> {
+        return std::shared_ptr<Emitter>(new NopEmitter(h.get(), mkldnn::impl::cpu::avx2, n));
+    };
+
+    jitters[ngraph::op::Load().get_type_info()]
+    = [this](const std::shared_ptr<ngraph::Node>& n) -> std::shared_ptr<Emitter> {
+        return std::shared_ptr<Emitter>(new LoadEmitter(h.get(), mkldnn::impl::cpu::avx2, n));
+    };
+
+    jitters[ngraph::op::ScalarLoad().get_type_info()]
+    = [this](const std::shared_ptr<ngraph::Node>& n) -> std::shared_ptr<Emitter> {
+        return std::shared_ptr<Emitter>(new ScalarLoadEmitter(h.get(), mkldnn::impl::cpu::avx2, n));
+    };
+
+    jitters[ngraph::op::Store().get_type_info()]
+    = [this](const std::shared_ptr<ngraph::Node>& n) -> std::shared_ptr<Emitter> {
+        return std::shared_ptr<Emitter>(new StoreEmitter(h.get(), mkldnn::impl::cpu::avx2, n));
+    };
+
+    jitters[ngraph::op::ScalarStore().get_type_info()]
+    = [this](const std::shared_ptr<ngraph::Node>& n) -> std::shared_ptr<Emitter> {
+        return std::shared_ptr<Emitter>(new ScalarStoreEmitter(h.get(), mkldnn::impl::cpu::avx2, n));
+    };
+
+    jitters[ngraph::op::BroadcastLoad().get_type_info()]
+    = [this](const std::shared_ptr<ngraph::Node>& n) -> std::shared_ptr<Emitter> {
+        return std::shared_ptr<Emitter>(new BroadcastLoadEmitter(h.get(), mkldnn::impl::cpu::avx2, n));
+    };
+
+    jitters[ngraph::op::v1::Multiply().get_type_info()]
+    = [this](const std::shared_ptr<ngraph::Node>& n) -> std::shared_ptr<Emitter> {
+        return std::shared_ptr<Emitter>(new MultiplyEmitter(h.get(), mkldnn::impl::cpu::avx2, n));
+    };
+
+    jitters[ngraph::op::Negative().get_type_info()]
+    = [this](const std::shared_ptr<ngraph::Node>& n) -> std::shared_ptr<Emitter> {
+        return std::shared_ptr<Emitter>(new NegativeEmitter(h.get(), mkldnn::impl::cpu::avx2, n));
+    };
+
+    jitters[ngraph::op::v1::Divide().get_type_info()]
+    = [this](const std::shared_ptr<ngraph::Node>& n) -> std::shared_ptr<Emitter> {
+        return std::shared_ptr<Emitter>(new DivideEmitter(h.get(), mkldnn::impl::cpu::avx2, n));
+    };
+
+    jitters[ngraph::op::Clamp().get_type_info()]
+    = [this](const std::shared_ptr<ngraph::Node>& n) -> std::shared_ptr<Emitter> {
+        return std::shared_ptr<Emitter>(new ClampEmitter(h.get(), mkldnn::impl::cpu::avx2, n));
+    };
+
+    jitters[ngraph::op::Relu().get_type_info()]
+    = [this](const std::shared_ptr<ngraph::Node>& n) -> std::shared_ptr<Emitter> {
+        return std::shared_ptr<Emitter>(new ReluEmitter(h.get(), mkldnn::impl::cpu::avx2, n));
+    };
+
+    jitters[ngraph::op::Sigmoid().get_type_info()]
+    = [this](const std::shared_ptr<ngraph::Node>& n) -> std::shared_ptr<Emitter> {
+        return std::shared_ptr<Emitter>(new SigmoidEmitter(h.get(), mkldnn::impl::cpu::avx2, n));
+    };
+
+    jitters[ngraph::op::SquaredDifference().get_type_info()]
+    = [this](const std::shared_ptr<ngraph::Node>& n) -> std::shared_ptr<Emitter> {
+        return std::shared_ptr<Emitter>(new SquaredDifferenceEmitter(h.get(), mkldnn::impl::cpu::avx2, n));
+    };
+
+    jitters[ngraph::op::Scalar().get_type_info()]
+    = [this](const std::shared_ptr<ngraph::Node>& n) -> std::shared_ptr<Emitter> {
+        return std::shared_ptr<Emitter>(new ScalarEmitter(h.get(), mkldnn::impl::cpu::avx2, n));
+    };
+
+    jitters[ngraph::op::PRelu().get_type_info()]
+    = [this](const std::shared_ptr<ngraph::Node>& n) -> std::shared_ptr<Emitter> {
+        return std::shared_ptr<Emitter>(new PReluEmitter(h.get(), mkldnn::impl::cpu::avx2, n));
+    };
+    jitters[ngraph::op::FakeBroadcast().get_type_info()]
+    = [this](const std::shared_ptr<ngraph::Node>& n) -> std::shared_ptr<Emitter> {
+        return std::shared_ptr<Emitter>(new FakeBroadcastEmitter(h.get(), mkldnn::impl::cpu::avx2, n));
+    };
+    jitters[ngraph::op::v1::Power().get_type_info()]
+    = [this](const std::shared_ptr<ngraph::Node>& n) -> std::shared_ptr<Emitter> {
+        return std::shared_ptr<Emitter>(new PowerEmitter(h.get(), mkldnn::impl::cpu::avx2, n));
+    };
     std::cout << jitters.size() << " @@@@@@@@ !!!!!!!!!" << std::endl;
 }
 
@@ -90,7 +154,6 @@ void CPUGenerator::emit(const std::shared_ptr<op::ScalarLoad>& op, RegInfo& regi
     remark(11) << " -> scalar_load (" << (registers.second[0]) << ") " << std::endl;
 }
 
-// Assumption that every parameter loaded from memory only one should be correct
 void CPUGenerator::emit(const std::shared_ptr<op::Load>& op, RegInfo& registers) const {
     auto ea = getEA(op);
     remark(11) << "  -> node is a load " << ea << " " << *op->get_input_shape(0).rbegin() << std::endl;
@@ -377,7 +440,6 @@ void CPUGenerator::emit(const std::shared_ptr<opset1::Sigmoid>& op, RegInfo& reg
     remark(11) << "    -> " << registers.second[0] << " = sigmoid (" << registers.first[0] << ")" << std::endl;
 }
 
-// FixMe: It should be Scalar instead!!
 void CPUGenerator::emit(const std::shared_ptr<op::Scalar>& constant, RegInfo& registers) const {
     if (constant->outputs().size() != 1) {
         throw ngraph_error("constant with more than 1 output is not supported");
