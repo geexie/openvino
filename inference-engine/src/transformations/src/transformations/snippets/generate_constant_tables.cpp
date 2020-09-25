@@ -5,19 +5,13 @@
 #include "transformations/snippets/generate_constant_tables.hpp"
 
 bool ngraph::pass::GenerateConstntTables::run_on_function(std::shared_ptr<Function> func) {
-    for (auto n : func->get_ordered_ops()) {
-        // std::cout << "Remark: generate contant tables for " << n->get_friendly_name() << std::endl;
-
-        if (auto op = std::dynamic_pointer_cast<opset1::Erf>(n)) {
-            m_generator->emit_table(op);
-        } else if (auto op = std::dynamic_pointer_cast<op::Scalar>(n)) {
-            m_generator->emit_table(op);
-        } else if (auto op = std::dynamic_pointer_cast<opset1::Clamp>(n)) {
-            m_generator->emit_table(op);
-        } else if (auto op = std::dynamic_pointer_cast<opset1::Sigmoid>(n)) {
-            m_generator->emit_table(op);
-        }
-    }
+    // for (auto n : func->get_ordered_ops()) {
+    //     if (m_generator->jitters.find(n->get_type_info()) != m_generator->jitters.end()) {
+    //         m_generator->jitters[n->get_type_info()](n)->emit_table();
+    //     } else {
+    //         throw ngraph::ngraph_error(std::string("unknown operation ") + n->get_type_info().name);
+    //     }
+    // }
 
     return false;
 }

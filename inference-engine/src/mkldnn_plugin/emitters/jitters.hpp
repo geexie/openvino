@@ -441,7 +441,12 @@ class ScalarEmitter : public ngraph::snippet::JitEmitter{
 public:
     ScalarEmitter(mkldnn::impl::cpu::jit_generator* h, mkldnn::impl::cpu::cpu_isa_t isa, const std::shared_ptr<ngraph::Node>& n)
     : JitEmitter(h, isa, n), offset(getTableOffset(n))  {
-        remark(10) << "ScalarEmitter: " << n->get_friendly_name() << n->get_type_info().name << std::endl;
+        auto out_shape = n->output(0).get_tensor().get_shape();
+        remark(10) << "ScalarEmitter: " << n->get_friendly_name() << " " << n->get_type_info().name << " " << out_shape << std::endl;
+        if (out_shape == ngraph::Shape() || ngraph::shape_size(out_shape) == 1) {
+            remark(11) << "pugging constant " << ngraph::as_type_ptr<ngraph::op::Scalar>(n)->cast_vector<float>()[0] << " to the stack" << std::endl;
+            value = mkldnn::impl::cpu::float2int(ngraph::as_type_ptr<ngraph::op::Scalar>(n)->cast_vector<float>()[0]);
+        }
     }
 
     void emit(const std::vector<size_t>& in,
@@ -454,8 +459,13 @@ public:
         remark(11) << "    -> " << out[0] << " = const (" << ")" << std::endl;
     }
 
+    void emit_table() override {
+        h->dd(value);
+    }
+
 private:
     size_t offset;
+    int32_t value;
 };
 
 class SigmoidEmitter : public ngraph::snippet::JitEmitter{
@@ -548,6 +558,46 @@ public:
         remark(11) << "    -> " << out[0] << " = sigmoid (" << in[0] << ")" << std::endl;
     }
 
+    void emit_table() override {
+        // mkldnn::impl::cpu::cpu_isa_traits<host_isa>::vlen;
+        size_t vlen = 8*sizeof(float);
+        const unsigned int cvals[] = {
+                0x3f800000, // [0] 1.0f
+                0x3f000000, // [1] 0.5f
+                0x3fb8aa3b, // [2] log2ef = 1.44269502f
+                0x3f317218, // [3] ln2f =   0.69314718f
+                0x0000007f, // [4] 0x7f
+                // exp(x) polynom
+                0x3f800001, // [5] p0 = 1.0000001f
+                0x3efffe85, // [6] p2 = 0.4999887f
+                0x3e2aaa3e, // [7] p3 = 0.16666505f
+                0x3d2bb1b1, // [8] p4 = 0.041917507f
+                0x3c091ec1, // [9] p5 = 0.008369149f
+                0x42b17218, //[10] logf(FLT_MAX)
+                0xc2aeac50, //[11] logf(FLT_MIN)
+                // tanh(x) constants,
+                0x80000000, //[12] mask to extract sign
+                0x39ddb3d7, //[13] arg below which tanh(x) = x
+                0x3f0c9f54, //[14] arg below which pol approx is valid
+                0x41102cb4, //[15] arg after which tanh(x) = 1
+                0xc0000000, //[16] -2.0f
+                0x7fffffff, //[17] mask to make positive
+                // tanh pol approx
+                0x3f7fffff, //[18] p0
+                0xbeaaa9cf, //[19] p1
+                0x3e085f1f, //[20] p2
+                0xbd572bda, //[21] p3
+                0x3c84fd08, //[22] p4
+                // gelu approx constants
+                0x3d372713, //[23] 0.044715
+                0x3f4c4229, //[24] sqrt(2/pi)
+        };
+
+        for (size_t i = 0; i < sizeof(cvals) / sizeof(cvals[0]); ++i) {
+            for (size_t d = 0; d < vlen / sizeof(float); ++d) h->dd(cvals[i]);
+        }
+    }
+
 private:
     size_t offset;
 };
@@ -556,6 +606,11 @@ class ClampEmitter : public ngraph::snippet::JitEmitter {
 public:
     ClampEmitter(mkldnn::impl::cpu::jit_generator* h, mkldnn::impl::cpu::cpu_isa_t isa, const std::shared_ptr<ngraph::Node>& n)
     : JitEmitter(h, isa, n), offset(getTableOffset(n)) {
+        auto op = ngraph::as_type_ptr<ngraph::opset1::Clamp>(n);
+        remark(11) << "pugging Clamp min " << op->get_min() << " to the stack" << std::endl;
+        vmin = mkldnn::impl::cpu::float2int(static_cast<float>(op->get_min()));
+        remark(11) << "pugging Clamp max " << op->get_max() << " to the stack" << std::endl;
+        vmax = mkldnn::impl::cpu::float2int(static_cast<float>(op->get_max()));
         remark(10) << "ClampEmitter: " << n->get_friendly_name() << n->get_type_info().name << std::endl;
     }
 
@@ -577,10 +632,16 @@ public:
         remark(1) << "    -> " << out[0] << " = clamp (" << in[0] << ")" << std::endl;
     }
 
+    void emit_table() override {
+        h->dd(vmin);
+        h->dd(vmax);
+    }
+
 private:
     size_t offset;
+    int32_t vmin;
+    int32_t vmax;
 };
-
 
 class ErfEmitter : public ngraph::snippet::JitEmitter {
 public:

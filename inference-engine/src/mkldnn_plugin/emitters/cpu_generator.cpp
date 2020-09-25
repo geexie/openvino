@@ -24,113 +24,51 @@
 using namespace std;
 using namespace ngraph;
 
-CPUGenerator::CPUGenerator() : h(new jit_snippet()) {
+#define CREATE_EMITTER(e_type) [this](const std::shared_ptr<ngraph::Node>& n) -> std::shared_ptr<Emitter> {return std::make_shared<e_type>(h.get(), isa, n);};
+
+CPUGenerator::CPUGenerator() : h(new jit_snippet()), isa(mkldnn::impl::cpu::avx2) {
     reg64_tmp_start = h->r8.getIdx();
 
-    // FIXME: it's going to be created with `NGRAPH_OP` macro or even pass manager like add mather, but cannot deside for now
-    jitters[ngraph::opset1::Add().get_type_info()]
-    = [this](const std::shared_ptr<ngraph::Node>& n) -> std::shared_ptr<Emitter> {
-        return std::shared_ptr<Emitter>(new AddEmitter(h.get(), mkldnn::impl::cpu::avx2, n));
-    };
+    jitters[ngraph::opset1::Parameter().get_type_info()] = CREATE_EMITTER(NopEmitter);
+    jitters[ngraph::opset1::Result().get_type_info()] = CREATE_EMITTER(NopEmitter);
 
-    jitters[ngraph::opset1::Subtract().get_type_info()]
-    = [this](const std::shared_ptr<ngraph::Node>& n) -> std::shared_ptr<Emitter> {
-        return std::shared_ptr<Emitter>(new SubtractEmitter(h.get(), mkldnn::impl::cpu::avx2, n));
-    };
+    jitters[ngraph::op::Load().get_type_info()] = CREATE_EMITTER(LoadEmitter);
+    jitters[ngraph::op::ScalarLoad().get_type_info()] = CREATE_EMITTER(ScalarLoadEmitter);
+    jitters[ngraph::op::Store().get_type_info()] = CREATE_EMITTER(StoreEmitter);
+    jitters[ngraph::op::ScalarStore().get_type_info()] = CREATE_EMITTER(ScalarStoreEmitter);
+    jitters[ngraph::op::BroadcastLoad().get_type_info()] = CREATE_EMITTER(BroadcastLoadEmitter);
+    jitters[ngraph::op::Scalar().get_type_info()] = CREATE_EMITTER(ScalarEmitter);
+    jitters[ngraph::op::FakeBroadcast().get_type_info()] = CREATE_EMITTER(FakeBroadcastEmitter);
 
-    jitters[ngraph::opset1::Erf().get_type_info()]
-    = [this](const std::shared_ptr<ngraph::Node>& n) -> std::shared_ptr<Emitter> {
-        return std::shared_ptr<Emitter>(new ErfEmitter(h.get(), mkldnn::impl::cpu::avx2, n));
-    };
+    jitters[ngraph::opset1::Add().get_type_info()] = CREATE_EMITTER(AddEmitter);
+    jitters[ngraph::opset1::Subtract().get_type_info()] = CREATE_EMITTER(SubtractEmitter);
+    jitters[ngraph::opset1::Erf().get_type_info()] = CREATE_EMITTER(ErfEmitter);
+    jitters[ngraph::opset1::Multiply().get_type_info()] = CREATE_EMITTER(MultiplyEmitter);
+    jitters[ngraph::opset1::Negative().get_type_info()] = CREATE_EMITTER(NegativeEmitter);
+    jitters[ngraph::opset1::Divide().get_type_info()] = CREATE_EMITTER(DivideEmitter);
+    jitters[ngraph::opset1::Clamp().get_type_info()] = CREATE_EMITTER(ClampEmitter);
+    jitters[ngraph::opset1::Relu().get_type_info()] = CREATE_EMITTER(ReluEmitter);
+    jitters[ngraph::op::Sigmoid().get_type_info()] = CREATE_EMITTER(SigmoidEmitter);
+    jitters[ngraph::opset1::SquaredDifference().get_type_info()] = CREATE_EMITTER(SquaredDifferenceEmitter);
+    jitters[ngraph::op::PRelu().get_type_info()] = CREATE_EMITTER(PReluEmitter);
+    jitters[ngraph::opset1::Power().get_type_info()] = CREATE_EMITTER(PowerEmitter);
+}
 
-    jitters[ngraph::opset1::Parameter().get_type_info()]
-    = [this](const std::shared_ptr<ngraph::Node>& n) -> std::shared_ptr<Emitter> {
-        return std::shared_ptr<Emitter>(new NopEmitter(h.get(), mkldnn::impl::cpu::avx2, n));
-    };
+code CPUGenerator::generate(std::shared_ptr<ngraph::Function>& f) const {
+    if (mkldnn::impl::cpu::mayiuse(isa)) {
+        remark(10) << "generating for AVX2 ISA" << std::endl;
+    } else {
+        throw ngraph::ngraph_error("unsupported architecture for code genration");
+    }
 
-    jitters[ngraph::opset1::Result().get_type_info()]
-    = [this](const std::shared_ptr<ngraph::Node>& n) -> std::shared_ptr<Emitter> {
-        return std::shared_ptr<Emitter>(new NopEmitter(h.get(), mkldnn::impl::cpu::avx2, n));
-    };
+    // sets up offsets to constant and temporals
+    // FIXME: is not needed for string based constants
+    ngraph::pass::SetupStackTemporalsOffsetPass().run_on_function(f);
 
-    jitters[ngraph::op::Load().get_type_info()]
-    = [this](const std::shared_ptr<ngraph::Node>& n) -> std::shared_ptr<Emitter> {
-        return std::shared_ptr<Emitter>(new LoadEmitter(h.get(), mkldnn::impl::cpu::avx2, n));
-    };
-
-    jitters[ngraph::op::ScalarLoad().get_type_info()]
-    = [this](const std::shared_ptr<ngraph::Node>& n) -> std::shared_ptr<Emitter> {
-        return std::shared_ptr<Emitter>(new ScalarLoadEmitter(h.get(), mkldnn::impl::cpu::avx2, n));
-    };
-
-    jitters[ngraph::op::Store().get_type_info()]
-    = [this](const std::shared_ptr<ngraph::Node>& n) -> std::shared_ptr<Emitter> {
-        return std::shared_ptr<Emitter>(new StoreEmitter(h.get(), mkldnn::impl::cpu::avx2, n));
-    };
-
-    jitters[ngraph::op::ScalarStore().get_type_info()]
-    = [this](const std::shared_ptr<ngraph::Node>& n) -> std::shared_ptr<Emitter> {
-        return std::shared_ptr<Emitter>(new ScalarStoreEmitter(h.get(), mkldnn::impl::cpu::avx2, n));
-    };
-
-    jitters[ngraph::op::BroadcastLoad().get_type_info()]
-    = [this](const std::shared_ptr<ngraph::Node>& n) -> std::shared_ptr<Emitter> {
-        return std::shared_ptr<Emitter>(new BroadcastLoadEmitter(h.get(), mkldnn::impl::cpu::avx2, n));
-    };
-
-    jitters[ngraph::op::v1::Multiply().get_type_info()]
-    = [this](const std::shared_ptr<ngraph::Node>& n) -> std::shared_ptr<Emitter> {
-        return std::shared_ptr<Emitter>(new MultiplyEmitter(h.get(), mkldnn::impl::cpu::avx2, n));
-    };
-
-    jitters[ngraph::op::Negative().get_type_info()]
-    = [this](const std::shared_ptr<ngraph::Node>& n) -> std::shared_ptr<Emitter> {
-        return std::shared_ptr<Emitter>(new NegativeEmitter(h.get(), mkldnn::impl::cpu::avx2, n));
-    };
-
-    jitters[ngraph::op::v1::Divide().get_type_info()]
-    = [this](const std::shared_ptr<ngraph::Node>& n) -> std::shared_ptr<Emitter> {
-        return std::shared_ptr<Emitter>(new DivideEmitter(h.get(), mkldnn::impl::cpu::avx2, n));
-    };
-
-    jitters[ngraph::op::Clamp().get_type_info()]
-    = [this](const std::shared_ptr<ngraph::Node>& n) -> std::shared_ptr<Emitter> {
-        return std::shared_ptr<Emitter>(new ClampEmitter(h.get(), mkldnn::impl::cpu::avx2, n));
-    };
-
-    jitters[ngraph::op::Relu().get_type_info()]
-    = [this](const std::shared_ptr<ngraph::Node>& n) -> std::shared_ptr<Emitter> {
-        return std::shared_ptr<Emitter>(new ReluEmitter(h.get(), mkldnn::impl::cpu::avx2, n));
-    };
-
-    jitters[ngraph::op::Sigmoid().get_type_info()]
-    = [this](const std::shared_ptr<ngraph::Node>& n) -> std::shared_ptr<Emitter> {
-        return std::shared_ptr<Emitter>(new SigmoidEmitter(h.get(), mkldnn::impl::cpu::avx2, n));
-    };
-
-    jitters[ngraph::op::SquaredDifference().get_type_info()]
-    = [this](const std::shared_ptr<ngraph::Node>& n) -> std::shared_ptr<Emitter> {
-        return std::shared_ptr<Emitter>(new SquaredDifferenceEmitter(h.get(), mkldnn::impl::cpu::avx2, n));
-    };
-
-    jitters[ngraph::op::Scalar().get_type_info()]
-    = [this](const std::shared_ptr<ngraph::Node>& n) -> std::shared_ptr<Emitter> {
-        return std::shared_ptr<Emitter>(new ScalarEmitter(h.get(), mkldnn::impl::cpu::avx2, n));
-    };
-
-    jitters[ngraph::op::PRelu().get_type_info()]
-    = [this](const std::shared_ptr<ngraph::Node>& n) -> std::shared_ptr<Emitter> {
-        return std::shared_ptr<Emitter>(new PReluEmitter(h.get(), mkldnn::impl::cpu::avx2, n));
-    };
-    jitters[ngraph::op::FakeBroadcast().get_type_info()]
-    = [this](const std::shared_ptr<ngraph::Node>& n) -> std::shared_ptr<Emitter> {
-        return std::shared_ptr<Emitter>(new FakeBroadcastEmitter(h.get(), mkldnn::impl::cpu::avx2, n));
-    };
-    jitters[ngraph::op::v1::Power().get_type_info()]
-    = [this](const std::shared_ptr<ngraph::Node>& n) -> std::shared_ptr<Emitter> {
-        return std::shared_ptr<Emitter>(new PowerEmitter(h.get(), mkldnn::impl::cpu::avx2, n));
-    };
-    std::cout << jitters.size() << " @@@@@@@@ !!!!!!!!!" << std::endl;
+    generate_propotype(f);
+    generate_tile(f);
+    generate_return(f);
+    return h->getCode();
 }
 
 void CPUGenerator::generate_propotype(std::shared_ptr<ngraph::Function>& f) const {
@@ -176,22 +114,8 @@ void CPUGenerator::generate_propotype(std::shared_ptr<ngraph::Function>& f) cons
     h->mov(p_table, l_table);
 }
 
-code CPUGenerator::generate(std::shared_ptr<ngraph::Function>& f) const {
-    if (mkldnn::impl::cpu::mayiuse(mkldnn::impl::cpu::avx2)) {
-        remark(10) << "generating for AVX2 ISA" << std::endl;
-    } else {
-        throw ngraph::ngraph_error("unsupported architecture for code genration");
-    }
-
-    // part 2: generation flow
-    // ngraph::pass::AssignRegistersPass().run_on_function(f_scalar);
-    // sets up offsets to constant and temporals
-    ngraph::pass::SetupStackTemporalsOffsetPass().run_on_function(f);
-
+void CPUGenerator::generate_tile(std::shared_ptr<ngraph::Function>& f) const {
     auto f_scalar = ngraph::clone_function(*f.get());
-
-    generate_propotype(f);
-
     ngraph::pass::ReplaceLoadsWithScalarLoads().run_on_function(f_scalar);
     int qqq = 0;
     for (auto op : f_scalar->get_ordered_ops()) {
@@ -224,7 +148,14 @@ code CPUGenerator::generate(std::shared_ptr<ngraph::Function>& f) const {
 
         // loop_body()
         h->L(for_body[loopId]); {
-            ngraph::pass::GenerateCodePass(this).run_on_function(bodies[loopId]);
+            for (auto n : bodies[loopId]->get_ordered_ops()) {
+                auto regs = ngraph::snippet::getRegisters(n);
+                if (jitters.find(n->get_type_info()) != jitters.end()) {
+                    jitters[n->get_type_info()](n)->emit(regs.first, regs.second);
+                } else {
+                    throw ngraph::ngraph_error(std::string("unknown operation ") + n->get_type_info().name);
+                }
+            }
 
             // loop_advance()
             h->sub(amount, nloads[loopId]);
@@ -235,13 +166,6 @@ code CPUGenerator::generate(std::shared_ptr<ngraph::Function>& f) const {
 
     h->L(for_body[nloads.size()]);
 #endif
-
-    generate_return(f);
-
-    return h->getCode();
-}
-
-void CPUGenerator::generate_tile(std::shared_ptr<ngraph::Function>& f) const {
 }
 
 void CPUGenerator::generate_return(std::shared_ptr<ngraph::Function>& f) const {
@@ -250,80 +174,12 @@ void CPUGenerator::generate_return(std::shared_ptr<ngraph::Function>& f) const {
     h->align(64);
     h->L(l_table);
 
-    ngraph::pass::GenerateConstntTables(this).run_on_function(f);
+    for (auto n : f->get_ordered_ops()) {
+        if (jitters.find(n->get_type_info()) != jitters.end()) {
+            jitters[n->get_type_info()](n)->emit_table();
+        } else {
+            throw ngraph::ngraph_error(std::string("unknown operation ") + n->get_type_info().name);
+        }
+    }
 #endif
-}
-
-void CPUGenerator::emit_table(const std::shared_ptr<op::Scalar>& op) const {
-    auto out_shape = op->output(0).get_tensor().get_shape();
-    if (out_shape == Shape() || ngraph::shape_size(out_shape) == 1) {
-        remark(11) << "pugging constant " << op->cast_vector<float>()[0] << " to the stack" << std::endl;
-        h->dd(mkldnn::impl::cpu::float2int(op->cast_vector<float>()[0]));
-    }
-}
-
-void CPUGenerator::emit_table(const std::shared_ptr<opset1::Erf>& op) const {
-    h->dd(mkldnn::impl::cpu::float2int(2.86f));                   // 0
-    h->dd(mkldnn::impl::cpu::float2int(1.00f));// 0x3f800000      // 1
-
-    h->dd(mkldnn::impl::cpu::float2int(90.0260162353515625f));    // 2
-    h->dd(mkldnn::impl::cpu::float2int(2232.00537109375f));       // 3
-    h->dd(mkldnn::impl::cpu::float2int(7003.3251953125f));        // 4
-    h->dd(mkldnn::impl::cpu::float2int(55592.30078125f));         // 5
-
-    h->dd(mkldnn::impl::cpu::float2int(33.56171417236328125f));   // 6
-    h->dd(mkldnn::impl::cpu::float2int(521.35797119140625f));     // 7
-    h->dd(mkldnn::impl::cpu::float2int(4594.32373046875f));       // 8
-    h->dd(mkldnn::impl::cpu::float2int(22629.0f));                // 9
-    h->dd(mkldnn::impl::cpu::float2int(49267.39453125f));         // 10
-
-    h->dd(mkldnn::impl::cpu::float2int(9.60497379302978515625f)); // 11
-    h->dd(0x80000000);                                            // 12
-    h->dd(0x7fffffff);                                            // 13
-}
-
-void CPUGenerator::emit_table(const std::shared_ptr<opset1::Clamp>& op) const {
-    remark(11) << "pugging Clamp min " << op->get_min() << " to the stack" << std::endl;
-    h->dd(mkldnn::impl::cpu::float2int(static_cast<float>(op->get_min())));
-    remark(11) << "pugging Clamp max " << op->get_max() << " to the stack" << std::endl;
-    h->dd(mkldnn::impl::cpu::float2int(static_cast<float>(op->get_max())));
-}
-
-void CPUGenerator::emit_table(const std::shared_ptr<opset1::Sigmoid>& op) const {
-    size_t vlen = 8*sizeof(float);
-    const unsigned int cvals[] = {
-            0x3f800000, // [0] 1.0f
-            0x3f000000, // [1] 0.5f
-            0x3fb8aa3b, // [2] log2ef = 1.44269502f
-            0x3f317218, // [3] ln2f =   0.69314718f
-            0x0000007f, // [4] 0x7f
-            // exp(x) polynom
-            0x3f800001, // [5] p0 = 1.0000001f
-            0x3efffe85, // [6] p2 = 0.4999887f
-            0x3e2aaa3e, // [7] p3 = 0.16666505f
-            0x3d2bb1b1, // [8] p4 = 0.041917507f
-            0x3c091ec1, // [9] p5 = 0.008369149f
-            0x42b17218, //[10] logf(FLT_MAX)
-            0xc2aeac50, //[11] logf(FLT_MIN)
-            // tanh(x) constants,
-            0x80000000, //[12] mask to extract sign
-            0x39ddb3d7, //[13] arg below which tanh(x) = x
-            0x3f0c9f54, //[14] arg below which pol approx is valid
-            0x41102cb4, //[15] arg after which tanh(x) = 1
-            0xc0000000, //[16] -2.0f
-            0x7fffffff, //[17] mask to make positive
-            // tanh pol approx
-            0x3f7fffff, //[18] p0
-            0xbeaaa9cf, //[19] p1
-            0x3e085f1f, //[20] p2
-            0xbd572bda, //[21] p3
-            0x3c84fd08, //[22] p4
-            // gelu approx constants
-            0x3d372713, //[23] 0.044715
-            0x3f4c4229, //[24] sqrt(2/pi)
-    };
-
-    for (size_t i = 0; i < sizeof(cvals) / sizeof(cvals[0]); ++i) {
-        for (size_t d = 0; d < vlen / sizeof(float); ++d) h->dd(cvals[i]);
-    }
 }

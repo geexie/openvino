@@ -11,8 +11,16 @@
 
 // SnippetS dialect
 NGRAPH_OP(Load, ngraph::op)
-NGRAPH_OP(FakeBroadcast, ngraph::op)
+NGRAPH_OP(ScalarLoad, ngraph::op)
+NGRAPH_OP(VectorLoad, ngraph::op)
+NGRAPH_OP(BlockedLoad, ngraph::op)
 NGRAPH_OP(BroadcastLoad, ngraph::op)
+
+NGRAPH_OP(Store, ngraph::op)
+NGRAPH_OP(ScalarStore, ngraph::op)
+NGRAPH_OP(VectorStore, ngraph::op)
+
+NGRAPH_OP(FakeBroadcast, ngraph::op)
 NGRAPH_OP(Scalar, ngraph::op)
 NGRAPH_OP(Nop, ngraph::op)
 
@@ -21,7 +29,9 @@ NGRAPH_OP(Nop, ngraph::op)
 // opset completeness
 NGRAPH_OP(Constant, ngraph::op)
 NGRAPH_OP(Parameter, ngraph::op::v0)
+NGRAPH_OP(BlockedParameter, ngraph::op)
 NGRAPH_OP(Result, ngraph::op::v0)
+NGRAPH_OP(Broadcast, ngraph::op::v1)
 
 // unary
 NGRAPH_OP(Abs, ngraph::op::v0)
@@ -81,7 +91,6 @@ NGRAPH_OP(Xor, ngraph::op::v0)
 // NGRAPH_OP(FakeQuantize, ngraph::op::v0) +
 // NGRAPH_OP(AvgPool, ngraph::op::v1)
 // NGRAPH_OP(BinaryConvolution, ngraph::op::v1)
-// NGRAPH_OP(Broadcast, ngraph::op::v1)
 // NGRAPH_OP(CTCGreedyDecoder, ngraph::op::v0)
 // NGRAPH_OP(Convolution, ngraph::op::v1)
 // NGRAPH_OP(ConvolutionBackpropData, ngraph::op::v1)

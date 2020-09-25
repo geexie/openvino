@@ -5,23 +5,20 @@
 #pragma once
 
 #include <transformations_visibility.hpp>
-
 #include "ngraph_ops/snippets_isa.hpp"
-
-// Raplace with jitter table
 
 namespace ngraph {
 namespace snippet {
 
 using code = const uint8_t *;
 using RegInfo = std::pair<std::vector<size_t>, std::vector<size_t>>;
+TRANSFORMATIONS_API auto getRegisters(std::shared_ptr<ngraph::Node>& n) -> ngraph::snippet::RegInfo;
 
 class TargetMachine {
 };
 
 class Emitter {
 public:
-    // jit_generator shouldnot be here, but have no idea for now, something like TargetMachine
     Emitter(const std::shared_ptr<ngraph::Node>& n) {
     }
 
@@ -41,8 +38,11 @@ public:
     Generator() = default;
     virtual ~Generator() = default;
 
+    // FIXME: generates code for a specific tile decided by whom?
     virtual code generate(std::shared_ptr<Function>& f) const = 0;
 
+protected:
+    // those might be too platform specific
     // FIXME: make prototype & module peramble/postamble to be a part of opset as well as more auxary things like function signature generation
     // How is to make it before parameters? should it be part of the module? like module is a functions + signature + return or what...
     virtual void generate_propotype(std::shared_ptr<ngraph::Function>& f) const = 0;
@@ -54,22 +54,8 @@ public:
     // How is to make it before parameters? should it be part of the module?
     virtual void generate_return(std::shared_ptr<ngraph::Function>& f) const = 0;
 
-    // FIXME: exclude extension form opset to use Standart broadcast
-    // FIXME: vec shouldn't be here in such an explicit way, but be need to generate tables once for a pass so cannot duplicate body
-    // generate it like normal compilers usually do in future
-
-    // FIXME: it's something which should be done automatically with constant map, since it's architecture specific
-    virtual void emit_table(const std::shared_ptr<op::Scalar>& constant) const = 0;
-    virtual void emit_table(const std::shared_ptr<opset1::Erf>& op) const = 0;
-    virtual void emit_table(const std::shared_ptr<opset1::Clamp>& op) const = 0;
-    virtual void emit_table(const std::shared_ptr<opset1::Sigmoid>& op) const = 0;
-
-public:
     mutable std::map<const ngraph::DiscreteTypeInfo, std::function<std::shared_ptr<Emitter>(std::shared_ptr<ngraph::Node>)>> jitters;
 };
-
-auto getRegisters(std::shared_ptr<ngraph::Node>& n) -> ngraph::snippet::RegInfo;
-
 
 } // namespace snippet
 using snippet::Generator;

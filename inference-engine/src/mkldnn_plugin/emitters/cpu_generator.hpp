@@ -65,17 +65,14 @@ public:
 
     code generate(std::shared_ptr<Function>& f) const override;
 
+protected:
     void generate_propotype(std::shared_ptr<ngraph::Function>& f) const override;
     void generate_tile(std::shared_ptr<ngraph::Function>& f) const override;
     void generate_return(std::shared_ptr<ngraph::Function>& f) const override;
 
-    void emit_table(const std::shared_ptr<op::Scalar>& constant) const override;
-    void emit_table(const std::shared_ptr<opset1::Erf>& op) const override;
-    void emit_table(const std::shared_ptr<opset1::Clamp>& op) const override;
-    void emit_table(const std::shared_ptr<opset1::Sigmoid>& op) const override;
-
 private:
     std::unique_ptr<mkldnn::impl::cpu::jit_generator> h;
+    mkldnn::impl::cpu::cpu_isa_t isa;
 
     int reg64_tmp_start { 8 }; // R8, R9, R10, R11, R12, R13, R14, R15 inputs+outputs+1
     Xbyak::Reg64 param  { mkldnn::impl::cpu::abi_param1 }; // RDI
