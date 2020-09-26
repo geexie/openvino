@@ -34,30 +34,6 @@ public:
     mkldnn::impl::cpu::cpu_isa_t host_isa;
 };
 
-class JitEmitter : public Emitter {
-public:
-    // jit_generator shouldnot be here, but have no idea for now, something like TargetMachine
-    JitEmitter(mkldnn::impl::cpu::jit_generator* h_, mkldnn::impl::cpu::cpu_isa_t host_isa_, const std::shared_ptr<ngraph::Node>& n)
-        : Emitter(n), h(h_), host_isa(host_isa_) {
-    }
-
-    virtual void emit(const std::vector<size_t>& in,
-                      const std::vector<size_t>& out,
-                      const std::vector<size_t>& pool = {},
-                      const std::vector<size_t>& gpr  = {}) const = 0;
-
-    virtual void emit_table() {
-    }
-
-protected:
-    mkldnn::impl::cpu::jit_generator* h;
-    mkldnn::impl::cpu::cpu_isa_t host_isa;
-
-    int reg64_tmp_start { 8 }; // R8, R9, R10, R11, R12, R13, R14, R15 inputs+outputs+1
-    Xbyak::Reg64 param  { mkldnn::impl::cpu::abi_param1 }; // RDI
-    Xbyak::Reg64 p_table { Xbyak::util::rax }; // get from somewhere
-};
-
 class TRANSFORMATIONS_API CPUGenerator : public Generator {
 public:
     CPUGenerator();
@@ -71,14 +47,12 @@ protected:
     void generate_return(std::shared_ptr<ngraph::Function>& f) const override;
 
 private:
+    // FIXME: use TargetMachine or something
     std::unique_ptr<mkldnn::impl::cpu::jit_generator> h;
     mkldnn::impl::cpu::cpu_isa_t isa;
 
     int reg64_tmp_start { 8 }; // R8, R9, R10, R11, R12, R13, R14, R15 inputs+outputs+1
     Xbyak::Reg64 param  { mkldnn::impl::cpu::abi_param1 }; // RDI
-    Xbyak::Reg64 p_table { Xbyak::util::rax }; // get from somewhere
-
-    mutable Xbyak::Label l_table;
 };
 
 } // namespace snippet

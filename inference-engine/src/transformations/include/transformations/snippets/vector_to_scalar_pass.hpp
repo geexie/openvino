@@ -13,14 +13,6 @@
 namespace ngraph {
 namespace pass {
 
-class TRANSFORMATIONS_API SetupStackTemporalsOffsetPass : public ngraph::pass::FunctionPass {
-public:
-    SetupStackTemporalsOffsetPass() : FunctionPass() {
-        set_property(PassProperty::REQUIRE_STATIC_SHAPE, true);
-    }
-    bool run_on_function(std::shared_ptr<ngraph::Function> function) override;
-};
-
 class TRANSFORMATIONS_API ReplaceLoadsWithScalarLoads: public ngraph::pass::GraphRewrite {
 public:
     ReplaceLoadsWithScalarLoads();

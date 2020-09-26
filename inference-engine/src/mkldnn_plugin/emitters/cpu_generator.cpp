@@ -2,13 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-#include "cpu_generator.hpp"
-
 #include "transformations/snippets/assign_registers_pass.hpp"
-#include "transformations/snippets/setup_stack_pass.hpp"
-#include "transformations/snippets/generate_constant_tables.hpp"
-#include "transformations/snippets/generate_pass.hpp"
+#include "transformations/snippets/vector_to_scalar_pass.hpp"
 #include "transformations/rt_info/register_info.hpp"
+#include "transformations/snippets/remarks.hpp"
 
 #include <ngraph/pass/visualize_tree.hpp>
 #include <ngraph/rt_info.hpp>
@@ -17,8 +14,7 @@
 #include <iostream>
 #include <array>
 
-#include "transformations/snippets/remarks.hpp"
-
+#include "cpu_generator.hpp"
 #include "jitters.hpp"
 #include "jit_eltwise_emitters.hpp"
 #include "jit_mkldnn_emitters.hpp"
@@ -88,12 +84,10 @@ CPUGenerator::CPUGenerator() : h(new jit_snippet()), isa(mkldnn::impl::cpu::avx2
     jitters[ngraph::opset1::Erf().get_type_info()] = CREATE_EMITTER(ErfEmitter);
     jitters[ngraph::opset1::Exp().get_type_info()] = CREATE_EMITTER(MKLDNNPlugin::jit_mkldnn_exp_emitter);
     // jitters[ngraph::opset1::Floor().get_type_info()] = CREATE_EMITTER(); // not supported
-    // jitters[ngraph::opset1::HardSigmoid().get_type_info()] = CREATE_EMITTER(); // not supported
     // jitters[ngraph::opset1::Log().get_type_info()] = CREATE_EMITTER(); // not supported
     jitters[ngraph::opset1::LogicalNot().get_type_info()] = CREATE_EMITTER(MKLDNNPlugin::jit_logical_not_emitter);
     jitters[ngraph::opset1::Negative().get_type_info()] = CREATE_EMITTER(NegativeEmitter);
     jitters[ngraph::opset1::Relu().get_type_info()] = CREATE_EMITTER(MKLDNNPlugin::jit_mkldnn_relu_emitter);
-    // jitters[ngraph::opset1::Selu().get_type_info()] = CREATE_EMITTER(); // not supported
     // jitters[ngraph::opset1::Sign().get_type_info()] = CREATE_EMITTER(); // not supported
     jitters[ngraph::opset1::Sigmoid().get_type_info()] = CREATE_EMITTER(MKLDNNPlugin::jit_mkldnn_sigmoid_emitter);
     // jitters[ngraph::opset1::Sin().get_type_info()] = CREATE_EMITTER(); // not supported
@@ -101,6 +95,9 @@ CPUGenerator::CPUGenerator() : h(new jit_snippet()), isa(mkldnn::impl::cpu::avx2
     jitters[ngraph::opset1::Sqrt().get_type_info()] = CREATE_EMITTER(MKLDNNPlugin::jit_mkldnn_sqrt_emitter);
     // jitters[ngraph::opset1::Tan().get_type_info()] = CREATE_EMITTER(); // not supported
     jitters[ngraph::opset1::Tanh().get_type_info()] = CREATE_EMITTER(MKLDNNPlugin::jit_mkldnn_tanh_emitter);
+
+    // jitters[ngraph::opset1::HardSigmoid().get_type_info()] = CREATE_EMITTER(); // not supported
+    // jitters[ngraph::opset1::Selu().get_type_info()] = CREATE_EMITTER(); // not supported
 }
 
 code CPUGenerator::generate(std::shared_ptr<ngraph::Function>& f) const {
@@ -109,10 +106,6 @@ code CPUGenerator::generate(std::shared_ptr<ngraph::Function>& f) const {
     } else {
         throw ngraph::ngraph_error("unsupported architecture for code genration");
     }
-
-    // sets up offsets to constant and temporals
-    // FIXME: is not needed for string based constants
-    ngraph::pass::SetupStackTemporalsOffsetPass().run_on_function(f);
 
     generate_propotype(f);
     generate_tile(f);
@@ -159,8 +152,6 @@ void CPUGenerator::generate_propotype(std::shared_ptr<ngraph::Function>& f) cons
     if (params.size()+results.size()+nConstants+1 > 8) {
         throw ngraph_error(std::string("snippet signature should not exceed 7 arguments. got") + std::to_string(params.size()+results.size()+nConstants));
     }
-
-    // h->mov(p_table, l_table);
 }
 
 void CPUGenerator::generate_tile(std::shared_ptr<ngraph::Function>& f) const {
@@ -247,17 +238,4 @@ void CPUGenerator::generate_tile(std::shared_ptr<ngraph::Function>& f) const {
 }
 
 void CPUGenerator::generate_return(std::shared_ptr<ngraph::Function>& f) const {
-//     h->postamble();
-// #if 1
-//     // h->align(64);
-//     // h->L(l_table);
-
-//     for (auto n : f->get_ordered_ops()) {
-//         if (jitters.find(n->get_type_info()) != jitters.end()) {
-//             jitters[n->get_type_info()](n)->emit_table();
-//         } else {
-//             throw ngraph::ngraph_error(std::string("unknown operation ") + n->get_type_info().name);
-//         }
-//     }
-// #endif
 }

@@ -3,16 +3,8 @@
 //
 
 #include "transformations/snippets/generator.hpp"
-#include "transformations/snippets/generate_pass.hpp"
-#include "transformations/snippets/assign_registers_pass.hpp"
 #include "transformations/snippets/remarks.hpp"
-#include "transformations/snippets/generator.hpp"
 #include "transformations/rt_info/register_info.hpp"
-
-#include "ngraph_ops/scalar.hpp"
-#include "ngraph_ops/nop.hpp"
-
-#include <ngraph/pass/visualize_tree.hpp>
 
 auto ngraph::snippet::getRegisters(std::shared_ptr<ngraph::Node>& n) -> ngraph::snippet::RegInfo {
     auto rt = n->get_rt_info();
