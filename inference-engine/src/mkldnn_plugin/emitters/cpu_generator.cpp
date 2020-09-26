@@ -81,11 +81,11 @@ CPUGenerator::CPUGenerator() : h(new jit_snippet()), isa(mkldnn::impl::cpu::avx2
     // jitters[ngraph::opset1::Asin().get_type_info()] = CREATE_EMITTER(); // not supported
     // jitters[ngraph::opset1::Atan().get_type_info()] = CREATE_EMITTER(); // not supported
     // jitters[ngraph::opset1::Ceiling().get_type_info()] = CREATE_EMITTER(); // not supported
-    // jitters[ngraph::opset1::Clamp().get_type_info()] = CREATE_EMITTER(ClampEmitter);
+    jitters[ngraph::opset1::Clamp().get_type_info()] = CREATE_EMITTER(ClampEmitter);
     // jitters[ngraph::opset1::Cos().get_type_info()] = CREATE_EMITTER(); // not supported
     // jitters[ngraph::opset1::Cosh().get_type_info()] = CREATE_EMITTER(); // not supported
     jitters[ngraph::opset1::Elu().get_type_info()] = CREATE_EMITTER(MKLDNNPlugin::jit_mkldnn_elu_emitter);
-    // jitters[ngraph::opset1::Erf().get_type_info()] = CREATE_EMITTER(ErfEmitter);
+    jitters[ngraph::opset1::Erf().get_type_info()] = CREATE_EMITTER(ErfEmitter);
     jitters[ngraph::opset1::Exp().get_type_info()] = CREATE_EMITTER(MKLDNNPlugin::jit_mkldnn_exp_emitter);
     // jitters[ngraph::opset1::Floor().get_type_info()] = CREATE_EMITTER(); // not supported
     // jitters[ngraph::opset1::HardSigmoid().get_type_info()] = CREATE_EMITTER(); // not supported

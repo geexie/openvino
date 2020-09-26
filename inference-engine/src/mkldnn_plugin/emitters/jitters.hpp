@@ -35,7 +35,6 @@ public:
     NopEmitter(mkldnn::impl::cpu::jit_generator* h, mkldnn::impl::cpu::cpu_isa_t isa, const std::shared_ptr<ngraph::Node>& n)
     : jit_emitter(h, isa, n) {
         remark(10) << "NopEmitter: " << n->get_friendly_name() << n->get_type_info().name << std::endl;
-        // prepare_table();
     }
 
     size_t get_inputs_num() override {return 0;}
@@ -255,14 +254,9 @@ private:
               const std::vector<size_t>& gpr  = {}) const override {
         remark(11) << " scalar constant" << std::endl;
         Xbyak::Ymm vmm = Xbyak::Ymm(out[0]);
-        // h->uni_vbroadcastss(vmm, h->ptr[p_table + offset*sizeof(float)]);
         h->uni_vbroadcastss(vmm, table_val("scalar"));
         remark(11) << "    -> " << out[0] << " = const (" << ")" << std::endl;
     }
-
-    // void emit_table() override {
-    //     h->dd(value);
-    // }
 
 private:
     size_t offset;
@@ -291,41 +285,42 @@ private:
     }
 };
 
-/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-class ClampEmitter : public ngraph::snippet::JitEmitter {
+class ClampEmitter : public MKLDNNPlugin::jit_emitter {
 public:
     ClampEmitter(mkldnn::impl::cpu::jit_generator* h, mkldnn::impl::cpu::cpu_isa_t isa, const std::shared_ptr<ngraph::Node>& n)
-    : JitEmitter(h, isa, n), offset(getTableOffset(n)) {
+    : jit_emitter(h, isa, n), offset(getTableOffset(n)) {
         auto op = ngraph::as_type_ptr<ngraph::opset1::Clamp>(n);
         remark(11) << "pugging Clamp min " << op->get_min() << " to the stack" << std::endl;
         vmin = mkldnn::impl::cpu::float2int(static_cast<float>(op->get_min()));
         remark(11) << "pugging Clamp max " << op->get_max() << " to the stack" << std::endl;
         vmax = mkldnn::impl::cpu::float2int(static_cast<float>(op->get_max()));
         remark(10) << "ClampEmitter: " << n->get_friendly_name() << n->get_type_info().name << std::endl;
-    }
 
-    void emit(const std::vector<size_t>& in,
+        push_arg_entry_of("vmin", vmin, false);
+        push_arg_entry_of("vmax", vmax, false);
+        prepare_table();
+    }
+    size_t get_inputs_num() override {return 1;}
+
+protected:
+    size_t aux_gprs_count() const override {return 1;}
+    size_t aux_vecs_count() const override {return 1;}
+
+    void emit_impl(const std::vector<size_t>& in,
               const std::vector<size_t>& out,
               const std::vector<size_t>& pool = {},
               const std::vector<size_t>& gpr  = {}) const override {
         remark(11) << "  -> clamp" << std::endl;
         Xbyak::Ymm vmm_src0 = Xbyak::Ymm(in[0]);
         Xbyak::Ymm vmm_dst0 = Xbyak::Ymm(out[0]);
-        Xbyak::Ymm vmm_max = Xbyak::Ymm(out[0]+1);
+        Xbyak::Ymm vmm_max = Xbyak::Ymm(aux_vec_idxs[0]);
 
-        h->uni_vbroadcastss(vmm_dst0, h->ptr[p_table + (offset+0)*sizeof(float)]);
-        h->uni_vbroadcastss(vmm_max, h->ptr[p_table + (offset+1)*sizeof(float)]);
-
+        h->uni_vbroadcastss(vmm_dst0, table_val("vmin"));
+        h->uni_vbroadcastss(vmm_max, table_val("vmax"));
         h->uni_vmaxps(vmm_dst0, vmm_src0, vmm_dst0);
         h->uni_vminps(vmm_dst0, vmm_dst0, vmm_max);
 
         remark(1) << "    -> " << out[0] << " = clamp (" << in[0] << ")" << std::endl;
-    }
-
-    void emit_table() override {
-        h->dd(vmin);
-        h->dd(vmax);
     }
 
 private:
@@ -334,106 +329,107 @@ private:
     int32_t vmax;
 };
 
-class ErfEmitter : public ngraph::snippet::JitEmitter {
+class ErfEmitter : public MKLDNNPlugin::jit_emitter {
 public:
     ErfEmitter(mkldnn::impl::cpu::jit_generator* h, mkldnn::impl::cpu::cpu_isa_t isa, const std::shared_ptr<ngraph::Node>& n)
-    : JitEmitter(h, isa, n), offset(getTableOffset(n)) {
+    : jit_emitter(h, isa, n), offset(getTableOffset(n)) {
         remark(10) << "ErfEmitter: " << n->get_friendly_name() << n->get_type_info().name << std::endl;
+
+        push_arg_entry_of("max_val", mkldnn::impl::cpu::float2int(2.86f), false);
+        push_arg_entry_of("one", 0x3f800000, false);
+
+        push_arg_entry_of("p1", mkldnn::impl::cpu::float2int(90.0260162353515625f), false);
+        push_arg_entry_of("p2", mkldnn::impl::cpu::float2int(2232.00537109375000f), false);
+        push_arg_entry_of("p3", mkldnn::impl::cpu::float2int(7003.32519531250000f), false);
+        push_arg_entry_of("p4", mkldnn::impl::cpu::float2int(55592.3007812500000f), false);
+
+        push_arg_entry_of("rp0", mkldnn::impl::cpu::float2int(33.56171417236328125f), false);
+        push_arg_entry_of("rp1", mkldnn::impl::cpu::float2int(521.35797119140625f), false);
+        push_arg_entry_of("rp2", mkldnn::impl::cpu::float2int(4594.32373046875f), false);
+        push_arg_entry_of("rp3", mkldnn::impl::cpu::float2int(22629.0f), false);
+        push_arg_entry_of("rp4", mkldnn::impl::cpu::float2int(49267.39453125f), false);
+
+        push_arg_entry_of("p0", mkldnn::impl::cpu::float2int(9.60497379302978515625f), false);
+
+        push_arg_entry_of("exp", 0x80000000, false);
+        push_arg_entry_of("sign", 0x7fffffff, false);
+
+        prepare_table();
     }
 
-    void emit(const std::vector<size_t>& in,
+    size_t get_inputs_num() override {return 1;}
+
+protected:
+    size_t aux_gprs_count() const override {return 1;}
+    size_t aux_vecs_count() const override {return 4;}
+
+    void emit_impl(const std::vector<size_t>& in,
               const std::vector<size_t>& out,
               const std::vector<size_t>& pool = {},
               const std::vector<size_t>& gpr  = {}) const override {
-        // FIXME: get from target machine conefig in future
-        Xbyak::Reg64 p_table { Xbyak::util::rax };
         remark(10) << "  -> erf " << offset << std::endl;
 
-        auto regIDx = out[0];
-        decltype(regIDx) latest = 15;
-
-        Xbyak::Ymm polynom = Xbyak::Ymm(regIDx);
-        h->uni_vbroadcastss(polynom, h->ptr[p_table + (offset + 11)*sizeof(float)]);
-
         Xbyak::Ymm x = Xbyak::Ymm(in[0]);
-        Xbyak::Ymm x2 = Xbyak::Ymm(regIDx+1);
-        Xbyak::Ymm c0 = Xbyak::Ymm(regIDx+2);
-        Xbyak::Ymm val = Xbyak::Ymm(regIDx+3);
-        Xbyak::Ymm sign = Xbyak::Ymm(regIDx+4);
+        Xbyak::Ymm polynom = Xbyak::Ymm(out[0]);
 
-        h->uni_vbroadcastss(c0, h->ptr[p_table + (offset + 12)*sizeof(float)]);
+        h->uni_vbroadcastss(polynom, table_val("p0"));
+
+        Xbyak::Ymm x2 = Xbyak::Ymm(aux_vec_idxs[0]);
+        Xbyak::Ymm c0 = Xbyak::Ymm(aux_vec_idxs[1]);
+        Xbyak::Ymm val = Xbyak::Ymm(aux_vec_idxs[2]);
+        Xbyak::Ymm sign = Xbyak::Ymm(aux_vec_idxs[3]);
+
+        h->uni_vbroadcastss(c0, table_val("exp"));
         h->uni_vandps(sign, x, c0);
 
-        h->uni_vbroadcastss(c0, h->ptr[p_table + (offset + 13)*sizeof(float)]);
+        h->uni_vbroadcastss(c0, table_val("sign"));
         h->uni_vandps(val, x, c0);
 
         h->uni_vmulps(x2, x, x);
 
-        h->uni_vbroadcastss(c0, h->ptr[p_table + (offset + 2)*sizeof(float)]);
+        h->uni_vbroadcastss(c0, table_val("p1"));
         h->uni_vfmadd213ps(polynom, x2, c0);
 
-        h->uni_vbroadcastss(c0, h->ptr[p_table + (offset + 3)*sizeof(float)]);
+        h->uni_vbroadcastss(c0, table_val("p2"));
         h->uni_vfmadd213ps(polynom, x2, c0);
 
-        h->uni_vbroadcastss(c0, h->ptr[p_table + (offset + 4)*sizeof(float)]);
+        h->uni_vbroadcastss(c0, table_val("p3"));
         h->uni_vfmadd213ps(polynom, x2, c0);
 
-        h->uni_vbroadcastss(c0, h->ptr[p_table + (offset + 5)*sizeof(float)]);
+        h->uni_vbroadcastss(c0, table_val("p4"));
         h->uni_vfmadd213ps(polynom, x2, c0);
 
         // x *= polynom;
         h->uni_vmulps(x, x, polynom);
 
-        h->uni_vbroadcastss(polynom, h->ptr[p_table + (offset + 1)*sizeof(float)]);
+        h->uni_vbroadcastss(polynom, table_val("one"));
 
-        h->uni_vbroadcastss(c0, h->ptr[p_table + (offset + 6)*sizeof(float)]);
+        h->uni_vbroadcastss(c0, table_val("rp0"));
         h->uni_vfmadd213ps(polynom, x2, c0);
 
-        h->uni_vbroadcastss(c0, h->ptr[p_table + (offset + 7)*sizeof(float)]);
+        h->uni_vbroadcastss(c0, table_val("rp1"));
         h->uni_vfmadd213ps(polynom, x2, c0);
 
-        h->uni_vbroadcastss(c0, h->ptr[p_table + (offset + 8)*sizeof(float)]);
+        h->uni_vbroadcastss(c0, table_val("rp2"));
         h->uni_vfmadd213ps(polynom, x2, c0);
 
-        h->uni_vbroadcastss(c0, h->ptr[p_table + (offset + 9)*sizeof(float)]);
+        h->uni_vbroadcastss(c0, table_val("rp3"));
         h->uni_vfmadd213ps(polynom, x2, c0);
 
-        h->uni_vbroadcastss(c0, h->ptr[p_table + (offset + 10)*sizeof(float)]);
+        h->uni_vbroadcastss(c0, table_val("rp4"));
         h->uni_vfmadd213ps(polynom, x2, c0);
 
         // return x / polynom;
         h->uni_vdivps(polynom, x, polynom);
 
-        h->uni_vbroadcastss(c0, h->ptr[p_table + (offset + 0)*sizeof(float)]);
+        h->uni_vbroadcastss(c0, table_val("max_val"));
         h->uni_vcmpgtps(val, val, c0);
 
-        h->uni_vbroadcastss(c0, h->ptr[p_table + (offset + 1)*sizeof(float)]);
+        h->uni_vbroadcastss(c0, table_val("one"));
         h->uni_vpxor(sign, sign, c0);
         h->uni_vblendvps(polynom, polynom, sign, val);
 
-        remark(10) << "Free registers " << latest - regIDx + 1 << std::endl;
         remark(10) << "    -> " << out[0] << " = erf (" << in[0] << ")" << std::endl;
-    }
-
-    void emit_table() override {
-        remark(10) << "generating table for Erf" << std::endl;
-        h->dd(mkldnn::impl::cpu::float2int(2.86f));                   // 0
-        h->dd(mkldnn::impl::cpu::float2int(1.00f));// 0x3f800000      // 1
-
-        h->dd(mkldnn::impl::cpu::float2int(90.0260162353515625f));    // 2
-        h->dd(mkldnn::impl::cpu::float2int(2232.00537109375f));       // 3
-        h->dd(mkldnn::impl::cpu::float2int(7003.3251953125f));        // 4
-        h->dd(mkldnn::impl::cpu::float2int(55592.30078125f));         // 5
-
-        h->dd(mkldnn::impl::cpu::float2int(33.56171417236328125f));   // 6
-        h->dd(mkldnn::impl::cpu::float2int(521.35797119140625f));     // 7
-        h->dd(mkldnn::impl::cpu::float2int(4594.32373046875f));       // 8
-        h->dd(mkldnn::impl::cpu::float2int(22629.0f));                // 9
-        h->dd(mkldnn::impl::cpu::float2int(49267.39453125f));         // 10
-
-        h->dd(mkldnn::impl::cpu::float2int(9.60497379302978515625f)); // 11
-        h->dd(0x80000000);                                            // 12
-        h->dd(0x7fffffff);                                            // 13
     }
 
 private:
