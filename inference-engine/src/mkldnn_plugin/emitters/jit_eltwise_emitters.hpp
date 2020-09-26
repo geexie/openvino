@@ -10,8 +10,6 @@
 
 namespace MKLDNNPlugin {
 
-
-/// Eltwise operations
 class jit_add_emitter : public jit_emitter {
 public:
     jit_add_emitter(mkldnn::impl::cpu::jit_generator *host, mkldnn::impl::cpu::cpu_isa_t host_isa, const std::shared_ptr<ngraph::Node>& n,
@@ -27,24 +25,6 @@ private:
     void emit_isa(const std::vector<size_t> &in_vec_idxs, const std::vector<size_t> &out_vec_idxs) const;
 };
 
-/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-class jit_mul_add_emitter : public jit_emitter {
-public:
-    jit_mul_add_emitter(mkldnn::impl::cpu::jit_generator *host, mkldnn::impl::cpu::cpu_isa_t host_isa, const std::shared_ptr<ngraph::Node>& n,
-                        InferenceEngine::Precision exec_prc = InferenceEngine::Precision::FP32);
-
-    size_t get_inputs_num() override;
-
-private:
-    void emit_impl(const std::vector<size_t> &in_vec_idxs, const std::vector<size_t> &out_vec_idxs,
-                  const std::vector<size_t> &pool_vec_idxs, const std::vector<size_t> &pool_gpr_idxs) const override;
-
-    template <mkldnn::impl::cpu::cpu_isa_t isa>
-    void emit_isa(const std::vector<size_t> &in_vec_idxs, const std::vector<size_t> &out_vec_idxs) const;
-
-    size_t aux_vecs_count() const override;
-};
 
 class jit_subtract_emitter : public jit_emitter {
 public:
@@ -91,6 +71,40 @@ private:
 
     template <mkldnn::impl::cpu::cpu_isa_t isa>
     void emit_isa(const std::vector<size_t> &in_vec_idxs, const std::vector<size_t> &out_vec_idxs) const;
+};
+
+
+class jit_squared_difference_emitter : public jit_emitter {
+public:
+    jit_squared_difference_emitter(mkldnn::impl::cpu::jit_generator *host, mkldnn::impl::cpu::cpu_isa_t host_isa, const std::shared_ptr<ngraph::Node>& n,
+                                   InferenceEngine::Precision exec_prc = InferenceEngine::Precision::FP32);
+
+    size_t get_inputs_num() override;
+
+private:
+    void emit_impl(const std::vector<size_t> &in_vec_idxs, const std::vector<size_t> &out_vec_idxs,
+                  const std::vector<size_t> &pool_vec_idxs, const std::vector<size_t> &pool_gpr_idxs) const override;
+
+    template <mkldnn::impl::cpu::cpu_isa_t isa>
+    void emit_isa(const std::vector<size_t> &in_vec_idxs, const std::vector<size_t> &out_vec_idxs) const;
+};
+
+
+class jit_prelu_emitter : public jit_emitter {
+public:
+    jit_prelu_emitter(mkldnn::impl::cpu::jit_generator *host, mkldnn::impl::cpu::cpu_isa_t host_isa, const std::shared_ptr<ngraph::Node>& n,
+                      InferenceEngine::Precision exec_prc = InferenceEngine::Precision::FP32);
+
+    size_t get_inputs_num() override;
+
+private:
+    void emit_impl(const std::vector<size_t> &in_vec_idxs, const std::vector<size_t> &out_vec_idxs,
+                  const std::vector<size_t> &pool_vec_idxs, const std::vector<size_t> &pool_gpr_idxs) const override;
+
+    template <mkldnn::impl::cpu::cpu_isa_t isa>
+    void emit_isa(const std::vector<size_t> &in_vec_idxs, const std::vector<size_t> &out_vec_idxs) const;
+
+    size_t aux_vecs_count() const override;
 };
 
 
@@ -152,38 +166,6 @@ public:
 
     size_t get_inputs_num() override;
     static std::set<InferenceEngine::Precision> get_supported_precisions();
-
-private:
-    void emit_impl(const std::vector<size_t> &in_vec_idxs, const std::vector<size_t> &out_vec_idxs,
-                  const std::vector<size_t> &pool_vec_idxs, const std::vector<size_t> &pool_gpr_idxs) const override;
-
-    template <mkldnn::impl::cpu::cpu_isa_t isa>
-    void emit_isa(const std::vector<size_t> &in_vec_idxs, const std::vector<size_t> &out_vec_idxs) const;
-};
-
-
-class jit_squared_difference_emitter : public jit_emitter {
-public:
-    jit_squared_difference_emitter(mkldnn::impl::cpu::jit_generator *host, mkldnn::impl::cpu::cpu_isa_t host_isa, const std::shared_ptr<ngraph::Node>& n,
-                                   InferenceEngine::Precision exec_prc = InferenceEngine::Precision::FP32);
-
-    size_t get_inputs_num() override;
-
-private:
-    void emit_impl(const std::vector<size_t> &in_vec_idxs, const std::vector<size_t> &out_vec_idxs,
-                  const std::vector<size_t> &pool_vec_idxs, const std::vector<size_t> &pool_gpr_idxs) const override;
-
-    template <mkldnn::impl::cpu::cpu_isa_t isa>
-    void emit_isa(const std::vector<size_t> &in_vec_idxs, const std::vector<size_t> &out_vec_idxs) const;
-};
-
-
-class jit_power_dynamic_emitter : public jit_emitter {
-public:
-    jit_power_dynamic_emitter(mkldnn::impl::cpu::jit_generator *host, mkldnn::impl::cpu::cpu_isa_t host_isa, const std::shared_ptr<ngraph::Node>& n,
-                              InferenceEngine::Precision exec_prc = InferenceEngine::Precision::FP32);
-
-    size_t get_inputs_num() override;
 
 private:
     void emit_impl(const std::vector<size_t> &in_vec_idxs, const std::vector<size_t> &out_vec_idxs,
@@ -364,6 +346,7 @@ private:
     size_t aux_vecs_count() const override;
 };
 
+
 class jit_logical_not_emitter : public jit_emitter {
 public:
     jit_logical_not_emitter(mkldnn::impl::cpu::jit_generator *host, mkldnn::impl::cpu::cpu_isa_t host_isa, const std::shared_ptr<ngraph::Node>& n,
@@ -381,6 +364,7 @@ private:
     void register_table_entries() override;
     size_t aux_vecs_count() const override;
 };
+
 
 class jit_power_static_emitter : public jit_emitter {
 public:
@@ -402,10 +386,12 @@ private:
     float power;
 };
 
-class jit_prelu_emitter : public jit_emitter {
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+class jit_mul_add_emitter : public jit_emitter {
 public:
-    jit_prelu_emitter(mkldnn::impl::cpu::jit_generator *host, mkldnn::impl::cpu::cpu_isa_t host_isa, const std::shared_ptr<ngraph::Node>& n,
-                      InferenceEngine::Precision exec_prc = InferenceEngine::Precision::FP32);
+    jit_mul_add_emitter(mkldnn::impl::cpu::jit_generator *host, mkldnn::impl::cpu::cpu_isa_t host_isa, const std::shared_ptr<ngraph::Node>& n,
+                        InferenceEngine::Precision exec_prc = InferenceEngine::Precision::FP32);
 
     size_t get_inputs_num() override;
 
@@ -418,5 +404,22 @@ private:
 
     size_t aux_vecs_count() const override;
 };
+
+
+class jit_power_dynamic_emitter : public jit_emitter {
+public:
+    jit_power_dynamic_emitter(mkldnn::impl::cpu::jit_generator *host, mkldnn::impl::cpu::cpu_isa_t host_isa, const std::shared_ptr<ngraph::Node>& n,
+                              InferenceEngine::Precision exec_prc = InferenceEngine::Precision::FP32);
+
+    size_t get_inputs_num() override;
+
+private:
+    void emit_impl(const std::vector<size_t> &in_vec_idxs, const std::vector<size_t> &out_vec_idxs,
+                  const std::vector<size_t> &pool_vec_idxs, const std::vector<size_t> &pool_gpr_idxs) const override;
+
+    template <mkldnn::impl::cpu::cpu_isa_t isa>
+    void emit_isa(const std::vector<size_t> &in_vec_idxs, const std::vector<size_t> &out_vec_idxs) const;
+};
+
 
 } // namespace MKLDNNPlugin

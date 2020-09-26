@@ -49,8 +49,6 @@ void jit_add_emitter::emit_isa(const std::vector<size_t> &in_vec_idxs, const std
     }
 }
 
-/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 /// MUL_ADD ///
 jit_mul_add_emitter::jit_mul_add_emitter(jit_generator *host, cpu_isa_t host_isa, const std::shared_ptr<ngraph::Node>& node, Precision exec_prc)
 : jit_emitter(host, host_isa, node, exec_prc) {}
