@@ -3,9 +3,7 @@
 //
 
 #include "jit_eltwise_emitters.hpp"
-// #include "mkldnn_eltwise_node.h"
 #include "jit_uni_eltwise.hpp"
-#include "ie_layers.h"
 #include <transformations/snippets/remarks.hpp>
 
 using namespace InferenceEngine;
@@ -387,7 +385,7 @@ void jit_minimum_emitter::emit_isa(const std::vector<size_t> &in_vec_idxs, const
     auto uni_vmin = [this](Vmm vmm_dst, Vmm vmm_src0, Vmm vmm_src1) {
         switch (exec_prc_) {
             case Precision::FP32: h->uni_vminps(vmm_dst, vmm_src0, vmm_src1); break;
-            case Precision::I32:  h->uni_vpminsd(vmm_dst, vmm_src0, vmm_src1); break;
+            // case Precision::I32:  h->uni_vpminsd(vmm_dst, vmm_src0, vmm_src1); break;
             default: assert(!"unsupported precision");
         }
     };

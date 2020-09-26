@@ -48,16 +48,12 @@
 #include "transformations/op_conversions/log_softmax_decomposition.hpp"
 
 #include "transformations/collapse_subgraph.hpp"
-#include "transformations/convert_gelu.hpp"
 
 #include <ngraph/pass/manager.hpp>
 #include <ngraph/pass/constant_folding.hpp>
 
-<<<<<<< HEAD
 NGRAPH_RTTI_DEFINITION(ngraph::pass::CommonOptimizations, "CommonOptimizations", 0);
 
-=======
->>>>>>> 0b395d8ca... [SS] cover quantized topologies as well
 bool ngraph::pass::CommonOptimizations::run_on_function(std::shared_ptr<ngraph::Function> f) {
     ngraph::pass::Manager manager(get_pass_config());
 

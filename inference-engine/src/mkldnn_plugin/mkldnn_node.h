@@ -173,7 +173,6 @@ static std::string NameFromType(Type type) {
             return "ScatterElementsUpdate";
         case ScatterNDUpdate:
             return "ScatterNDUpdate";
-<<<<<<< HEAD
         case Interpolate:
             return "Interpolate";
         case ReduceAnd:
@@ -200,10 +199,8 @@ static std::string NameFromType(Type type) {
             return "ReduceSum";
         case ReduceSumSquare:
             return "ReduceSumSquare";
-=======
         case Subgraph:
             return "Subgraph";
->>>>>>> 6aa1f4c1f... SnippetS POC atomic bomb commit
         default:
             return "Unknown";
     }
