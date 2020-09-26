@@ -5,6 +5,7 @@
 #pragma once
 
 #include <ngraph/rt_info.hpp>
+#include "emitter.hpp"
 
 static inline auto getTableOffset(const std::shared_ptr<ngraph::Node>& n) -> size_t {
     auto rt = n->get_rt_info();
@@ -29,28 +30,35 @@ static inline auto getEA(const std::shared_ptr<ngraph::Node>& n) -> size_t {
     return ea;
 }
 
-class NopEmitter : public ngraph::snippet::JitEmitter {
+class NopEmitter : public MKLDNNPlugin::jit_emitter {
 public:
     NopEmitter(mkldnn::impl::cpu::jit_generator* h, mkldnn::impl::cpu::cpu_isa_t isa, const std::shared_ptr<ngraph::Node>& n)
-    : JitEmitter(h, isa, n) {
+    : jit_emitter(h, isa, n) {
         remark(10) << "NopEmitter: " << n->get_friendly_name() << n->get_type_info().name << std::endl;
+        // prepare_table();
     }
 
-    void emit(const std::vector<size_t>& in,
-              const std::vector<size_t>& out,
-              const std::vector<size_t>& pool = {},
-              const std::vector<size_t>& gpr  = {}) const override {
+    size_t get_inputs_num() override {return 0;}
+
+private:
+    void emit_impl(const std::vector<size_t>& in,
+                   const std::vector<size_t>& out,
+                   const std::vector<size_t>& pool = {},
+                   const std::vector<size_t>& gpr  = {}) const override {
     }
 };
 
-class StoreEmitter : public ngraph::snippet::JitEmitter {
+class StoreEmitter : public MKLDNNPlugin::jit_emitter  {
 public:
     StoreEmitter(mkldnn::impl::cpu::jit_generator* h, mkldnn::impl::cpu::cpu_isa_t isa, const std::shared_ptr<ngraph::Node>& n)
-    : JitEmitter(h, isa, n), ea(getEA(n)) {
+    : jit_emitter(h, isa, n), ea(getEA(n)) {
         remark(10) << "StoreEmitter: " << n->get_friendly_name() << n->get_type_info().name << std::endl;
     }
 
-    void emit(const std::vector<size_t>& in,
+    size_t get_inputs_num() override {return 1;}
+
+private:
+    void emit_impl(const std::vector<size_t>& in,
               const std::vector<size_t>& out,
               const std::vector<size_t>& pool = {},
               const std::vector<size_t>& gpr  = {}) const override {
@@ -68,14 +76,16 @@ private:
     size_t ea;
 };
 
-class ScalarStoreEmitter : public ngraph::snippet::JitEmitter {
+class ScalarStoreEmitter : public MKLDNNPlugin::jit_emitter {
 public:
     ScalarStoreEmitter(mkldnn::impl::cpu::jit_generator* h, mkldnn::impl::cpu::cpu_isa_t isa, const std::shared_ptr<ngraph::Node>& n)
-    : JitEmitter(h, isa, n), ea(getEA(n)) {
+    : jit_emitter(h, isa, n), ea(getEA(n)) {
         remark(10) << "ScalarStoreEmitter: " << n->get_friendly_name() << n->get_type_info().name << std::endl;
     }
+    size_t get_inputs_num() override {return 1;}
 
-    void emit(const std::vector<size_t>& in,
+private:
+    void emit_impl(const std::vector<size_t>& in,
               const std::vector<size_t>& out,
               const std::vector<size_t>& pool = {},
               const std::vector<size_t>& gpr  = {}) const override {
@@ -94,18 +104,19 @@ private:
 };
 
 /// Assumption that every parameter loaded from memory only one should be correct
-class LoadEmitter : public ngraph::snippet::JitEmitter {
+class LoadEmitter : public MKLDNNPlugin::jit_emitter {
 public:
     LoadEmitter(mkldnn::impl::cpu::jit_generator* h, mkldnn::impl::cpu::cpu_isa_t isa, const std::shared_ptr<ngraph::Node>& n)
-    : JitEmitter(h, isa, n), ea(getEA(n)), shouldPostIncrement(*n->get_input_shape(0).rbegin() != 1) {
+    : jit_emitter(h, isa, n), ea(getEA(n)), shouldPostIncrement(*n->get_input_shape(0).rbegin() != 1) {
         remark(10) << "LoadEmitter: " << n->get_friendly_name() << n->get_type_info().name << std::endl;
     }
+    size_t get_inputs_num() override {return 0;}
 
-    void emit(const std::vector<size_t>& in,
+private:
+    void emit_impl(const std::vector<size_t>& in,
               const std::vector<size_t>& out,
               const std::vector<size_t>& pool = {},
               const std::vector<size_t>& gpr  = {}) const override {
-        // auto ea = getEA(op);
         remark(11) << "  -> node is a load " << ea << " " << shouldPostIncrement << std::endl;
 
         Xbyak::Reg64 in_reg(reg64_tmp_start + ea);
@@ -125,14 +136,16 @@ private:
     bool shouldPostIncrement;
 };
 
-class BroadcastLoadEmitter : public ngraph::snippet::JitEmitter {
+class BroadcastLoadEmitter : public MKLDNNPlugin::jit_emitter {
 public:
     BroadcastLoadEmitter(mkldnn::impl::cpu::jit_generator* h, mkldnn::impl::cpu::cpu_isa_t isa, const std::shared_ptr<ngraph::Node>& n)
-    : JitEmitter(h, isa, n), ea(getEA(n)) {
+    : jit_emitter(h, isa, n), ea(getEA(n)) {
         remark(10) << "BroadcastLoadEmitter: " << n->get_friendly_name() << n->get_type_info().name << std::endl;
     }
+    size_t get_inputs_num() override {return 0;}
 
-    void emit(const std::vector<size_t>& in,
+private:
+    void emit_impl(const std::vector<size_t>& in,
               const std::vector<size_t>& out,
               const std::vector<size_t>& pool = {},
               const std::vector<size_t>& gpr  = {}) const override {
@@ -151,14 +164,16 @@ private:
     size_t ea;
 };
 
-class ScalarLoadEmitter : public ngraph::snippet::JitEmitter {
+class ScalarLoadEmitter : public MKLDNNPlugin::jit_emitter {
 public:
     ScalarLoadEmitter(mkldnn::impl::cpu::jit_generator* h, mkldnn::impl::cpu::cpu_isa_t isa, const std::shared_ptr<ngraph::Node>& n)
-    : JitEmitter(h, isa, n), ea(getEA(n)), shouldPostIncrement(*n->get_input_shape(0).rbegin() != 1) {
+    : jit_emitter(h, isa, n), ea(getEA(n)), shouldPostIncrement(*n->get_input_shape(0).rbegin() != 1) {
         remark(10) << "ScalarLoadEmitter: " << n->get_friendly_name() << n->get_type_info().name << std::endl;
     }
+    size_t get_inputs_num() override {return 0;}
 
-    void emit(const std::vector<size_t>& in,
+private:
+    void emit_impl(const std::vector<size_t>& in,
               const std::vector<size_t>& out,
               const std::vector<size_t>& pool = {},
               const std::vector<size_t>& gpr  = {}) const override {
@@ -181,6 +196,80 @@ private:
     size_t ea;
     bool shouldPostIncrement;
 };
+
+class FakeBroadcastEmitter : public MKLDNNPlugin::jit_emitter {
+public:
+    FakeBroadcastEmitter(mkldnn::impl::cpu::jit_generator* h, mkldnn::impl::cpu::cpu_isa_t isa, const std::shared_ptr<ngraph::Node>& n)
+    : jit_emitter(h, isa, n), use_broadcast(*n->get_input_shape(0).rbegin() != *n->get_output_shape(0).rbegin()) {
+        remark(10) << "FakeBroadcastEmitter: " << n->get_friendly_name() << n->get_type_info().name << std::endl;
+    }
+    size_t get_inputs_num() override {return 1;}
+
+private:
+    void emit_impl(const std::vector<size_t>& in,
+              const std::vector<size_t>& out,
+              const std::vector<size_t>& pool = {},
+              const std::vector<size_t>& gpr  = {}) const override {
+        // Fix me: make it bypass nop
+        remark(11) << "fake broadcast "<< use_broadcast << std::endl;
+
+        Xbyak::Ymm vmm_src0 = Xbyak::Ymm(in[0]);
+        Xbyak::Ymm vmm_dst  = Xbyak::Ymm(out[0]);
+
+        if (use_broadcast) {
+            h->uni_vbroadcastss(vmm_dst, Xbyak::Xmm(in[0]));
+        } else {
+            h->uni_vmovups(vmm_dst, vmm_src0);
+        }
+
+        remark(11) << "    -> " << out[0] << " = broadcast (" << in[0] << ")" << std::endl;
+    }
+
+private:
+    bool use_broadcast;
+};
+
+class ScalarEmitter : public MKLDNNPlugin::jit_emitter {
+public:
+    ScalarEmitter(mkldnn::impl::cpu::jit_generator* h, mkldnn::impl::cpu::cpu_isa_t isa, const std::shared_ptr<ngraph::Node>& n)
+    : jit_emitter(h, isa, n), offset(getTableOffset(n))  {
+        auto out_shape = n->output(0).get_tensor().get_shape();
+        remark(10) << "ScalarEmitter: " << n->get_friendly_name() << " " << n->get_type_info().name << " " << out_shape << std::endl;
+        if (out_shape == ngraph::Shape() || ngraph::shape_size(out_shape) == 1) {
+            remark(11) << "pugging constant " << ngraph::as_type_ptr<ngraph::op::Scalar>(n)->cast_vector<float>()[0] << " to the stack" << std::endl;
+            value = mkldnn::impl::cpu::float2int(ngraph::as_type_ptr<ngraph::op::Scalar>(n)->cast_vector<float>()[0]);
+        }
+
+        push_arg_entry_of("scalar", value, false);
+        prepare_table();
+    }
+    size_t get_inputs_num() override {return 0;}
+
+protected:
+    size_t aux_gprs_count() const override {return 1;}
+
+private:
+    void emit_impl(const std::vector<size_t>& in,
+              const std::vector<size_t>& out,
+              const std::vector<size_t>& pool = {},
+              const std::vector<size_t>& gpr  = {}) const override {
+        remark(11) << " scalar constant" << std::endl;
+        Xbyak::Ymm vmm = Xbyak::Ymm(out[0]);
+        // h->uni_vbroadcastss(vmm, h->ptr[p_table + offset*sizeof(float)]);
+        h->uni_vbroadcastss(vmm, table_val("scalar"));
+        remark(11) << "    -> " << out[0] << " = const (" << ")" << std::endl;
+    }
+
+    // void emit_table() override {
+    //     h->dd(value);
+    // }
+
+private:
+    size_t offset;
+    int32_t value;
+};
+
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 class AddEmitter : public ngraph::snippet::JitEmitter {
 public:
@@ -333,36 +422,6 @@ public:
     }
 };
 
-class FakeBroadcastEmitter : public ngraph::snippet::JitEmitter{
-public:
-    FakeBroadcastEmitter(mkldnn::impl::cpu::jit_generator* h, mkldnn::impl::cpu::cpu_isa_t isa, const std::shared_ptr<ngraph::Node>& n)
-    : JitEmitter(h, isa, n), use_broadcast(*n->get_input_shape(0).rbegin() != *n->get_output_shape(0).rbegin()) {
-        remark(10) << "FakeBroadcastEmitter: " << n->get_friendly_name() << n->get_type_info().name << std::endl;
-    }
-
-    void emit(const std::vector<size_t>& in,
-              const std::vector<size_t>& out,
-              const std::vector<size_t>& pool = {},
-              const std::vector<size_t>& gpr  = {}) const override {
-        // Fix me: make it bypass nop
-        remark(11) << "fake broadcast "<< std::endl;
-
-        Xbyak::Ymm vmm_src0 = Xbyak::Ymm(in[0]);
-        Xbyak::Ymm vmm_dst  = Xbyak::Ymm(out[0]);
-
-        if (use_broadcast) {
-            h->uni_vbroadcastss(vmm_dst, Xbyak::Xmm(in[0]));
-        } else {
-            h->uni_vmovups(vmm_dst, vmm_src0);
-        }
-
-        remark(11) << "    -> " << out[0] << " = broadcast (" << in[0] << ")" << std::endl;
-    }
-
-private:
-    bool use_broadcast;
-};
-
 class SquaredDifferenceEmitter : public ngraph::snippet::JitEmitter{
 public:
     SquaredDifferenceEmitter(mkldnn::impl::cpu::jit_generator* h, mkldnn::impl::cpu::cpu_isa_t isa, const std::shared_ptr<ngraph::Node>& n)
@@ -435,37 +494,6 @@ public:
 
 private:
     float order;
-};
-
-class ScalarEmitter : public ngraph::snippet::JitEmitter{
-public:
-    ScalarEmitter(mkldnn::impl::cpu::jit_generator* h, mkldnn::impl::cpu::cpu_isa_t isa, const std::shared_ptr<ngraph::Node>& n)
-    : JitEmitter(h, isa, n), offset(getTableOffset(n))  {
-        auto out_shape = n->output(0).get_tensor().get_shape();
-        remark(10) << "ScalarEmitter: " << n->get_friendly_name() << " " << n->get_type_info().name << " " << out_shape << std::endl;
-        if (out_shape == ngraph::Shape() || ngraph::shape_size(out_shape) == 1) {
-            remark(11) << "pugging constant " << ngraph::as_type_ptr<ngraph::op::Scalar>(n)->cast_vector<float>()[0] << " to the stack" << std::endl;
-            value = mkldnn::impl::cpu::float2int(ngraph::as_type_ptr<ngraph::op::Scalar>(n)->cast_vector<float>()[0]);
-        }
-    }
-
-    void emit(const std::vector<size_t>& in,
-              const std::vector<size_t>& out,
-              const std::vector<size_t>& pool = {},
-              const std::vector<size_t>& gpr  = {}) const override {
-        remark(11) << " scalar constant" << std::endl;
-        Xbyak::Ymm vmm = Xbyak::Ymm(out[0]);
-        h->uni_vbroadcastss(vmm, h->ptr[p_table + offset*sizeof(float)]);
-        remark(11) << "    -> " << out[0] << " = const (" << ")" << std::endl;
-    }
-
-    void emit_table() override {
-        h->dd(value);
-    }
-
-private:
-    size_t offset;
-    int32_t value;
 };
 
 class SigmoidEmitter : public ngraph::snippet::JitEmitter{

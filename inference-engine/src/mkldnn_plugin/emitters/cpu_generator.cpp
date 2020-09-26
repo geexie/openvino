@@ -20,6 +20,7 @@
 #include "transformations/snippets/remarks.hpp"
 
 #include "jitters.hpp"
+#include "jit_eltwise_emitters.hpp"
 
 using namespace std;
 using namespace ngraph;
@@ -40,18 +41,18 @@ CPUGenerator::CPUGenerator() : h(new jit_snippet()), isa(mkldnn::impl::cpu::avx2
     jitters[ngraph::op::Scalar().get_type_info()] = CREATE_EMITTER(ScalarEmitter);
     jitters[ngraph::op::FakeBroadcast().get_type_info()] = CREATE_EMITTER(FakeBroadcastEmitter);
 
-    jitters[ngraph::opset1::Add().get_type_info()] = CREATE_EMITTER(AddEmitter);
-    jitters[ngraph::opset1::Subtract().get_type_info()] = CREATE_EMITTER(SubtractEmitter);
-    jitters[ngraph::opset1::Erf().get_type_info()] = CREATE_EMITTER(ErfEmitter);
-    jitters[ngraph::opset1::Multiply().get_type_info()] = CREATE_EMITTER(MultiplyEmitter);
-    jitters[ngraph::opset1::Negative().get_type_info()] = CREATE_EMITTER(NegativeEmitter);
-    jitters[ngraph::opset1::Divide().get_type_info()] = CREATE_EMITTER(DivideEmitter);
-    jitters[ngraph::opset1::Clamp().get_type_info()] = CREATE_EMITTER(ClampEmitter);
-    jitters[ngraph::opset1::Relu().get_type_info()] = CREATE_EMITTER(ReluEmitter);
-    jitters[ngraph::op::Sigmoid().get_type_info()] = CREATE_EMITTER(SigmoidEmitter);
-    jitters[ngraph::opset1::SquaredDifference().get_type_info()] = CREATE_EMITTER(SquaredDifferenceEmitter);
-    jitters[ngraph::op::PRelu().get_type_info()] = CREATE_EMITTER(PReluEmitter);
-    jitters[ngraph::opset1::Power().get_type_info()] = CREATE_EMITTER(PowerEmitter);
+    jitters[ngraph::opset1::Add().get_type_info()] = CREATE_EMITTER(MKLDNNPlugin::jit_add_emitter);
+    // jitters[ngraph::opset1::Subtract().get_type_info()] = CREATE_EMITTER(SubtractEmitter);
+    // jitters[ngraph::opset1::Erf().get_type_info()] = CREATE_EMITTER(ErfEmitter);
+    // jitters[ngraph::opset1::Multiply().get_type_info()] = CREATE_EMITTER(MultiplyEmitter);
+    // jitters[ngraph::opset1::Negative().get_type_info()] = CREATE_EMITTER(NegativeEmitter);
+    // jitters[ngraph::opset1::Divide().get_type_info()] = CREATE_EMITTER(DivideEmitter);
+    // jitters[ngraph::opset1::Clamp().get_type_info()] = CREATE_EMITTER(ClampEmitter);
+    // jitters[ngraph::opset1::Relu().get_type_info()] = CREATE_EMITTER(ReluEmitter);
+    // jitters[ngraph::op::Sigmoid().get_type_info()] = CREATE_EMITTER(SigmoidEmitter);
+    // jitters[ngraph::opset1::SquaredDifference().get_type_info()] = CREATE_EMITTER(SquaredDifferenceEmitter);
+    // jitters[ngraph::op::PRelu().get_type_info()] = CREATE_EMITTER(PReluEmitter);
+    // jitters[ngraph::opset1::Power().get_type_info()] = CREATE_EMITTER(PowerEmitter);
 }
 
 code CPUGenerator::generate(std::shared_ptr<ngraph::Function>& f) const {
@@ -111,7 +112,7 @@ void CPUGenerator::generate_propotype(std::shared_ptr<ngraph::Function>& f) cons
         throw ngraph_error(std::string("snippet signature should not exceed 7 arguments. got") + std::to_string(params.size()+results.size()+nConstants));
     }
 
-    h->mov(p_table, l_table);
+    // h->mov(p_table, l_table);
 }
 
 void CPUGenerator::generate_tile(std::shared_ptr<ngraph::Function>& f) const {
@@ -126,12 +127,38 @@ void CPUGenerator::generate_tile(std::shared_ptr<ngraph::Function>& f) const {
         remark(13) << "op " << qqq++ << " " << op->get_friendly_name() << " (" << op->get_type_name() << ") " << op << std::endl;
     }
 
+    std::vector<std::shared_ptr<Emitter>> lowered;
+    std::vector<std::shared_ptr<Emitter>> scalar_lowered;
+    std::vector<RegInfo> reginfo;
+    std::vector<RegInfo> scalar_reginfo;
+
+    for (auto n : f->get_ordered_ops()) {
+        reginfo.push_back(ngraph::snippet::getRegisters(n));
+        if (jitters.find(n->get_type_info()) != jitters.end()) {
+            lowered.push_back(jitters[n->get_type_info()](n));
+        } else {
+            throw ngraph::ngraph_error(std::string("unknown operation ") + n->get_type_info().name);
+        }
+    }
+
+    for (auto n : f_scalar->get_ordered_ops()) {
+        scalar_reginfo.push_back(ngraph::snippet::getRegisters(n));
+        if (jitters.find(n->get_type_info()) != jitters.end()) {
+            scalar_lowered.push_back(jitters[n->get_type_info()](n));
+        } else {
+            throw ngraph::ngraph_error(std::string("unknown operation ") + n->get_type_info().name);
+        }
+    }
+
 #if 1
     // configure tile variants
     size_t vlen = mkldnn::impl::cpu::cpu_isa_traits<mkldnn::impl::cpu::avx2>::vlen;
     std::array<size_t, 2> nloads   = {vlen / sizeof(float), 1};
     std::array<std::shared_ptr<ngraph::Function>, 2> bodies   = {f, f_scalar};
     std::array<Xbyak::Label, nloads.size() + 1> for_body;
+
+    std::array<std::vector<std::shared_ptr<Emitter>>, 2> lowered_ops = {lowered, scalar_lowered};
+    std::array<std::vector<RegInfo>, 2> reginfos   = {reginfo, scalar_reginfo};
 
     // obtain work amount
     Xbyak::Reg64 param = mkldnn::impl::cpu::abi_param1; // RCX
@@ -148,13 +175,9 @@ void CPUGenerator::generate_tile(std::shared_ptr<ngraph::Function>& f) const {
 
         // loop_body()
         h->L(for_body[loopId]); {
-            for (auto n : bodies[loopId]->get_ordered_ops()) {
-                auto regs = ngraph::snippet::getRegisters(n);
-                if (jitters.find(n->get_type_info()) != jitters.end()) {
-                    jitters[n->get_type_info()](n)->emit(regs.first, regs.second);
-                } else {
-                    throw ngraph::ngraph_error(std::string("unknown operation ") + n->get_type_info().name);
-                }
+            for (size_t i = 0; i < lowered_ops[loopId].size(); i++) {
+                auto regs = reginfos[loopId][i];
+                lowered_ops[loopId][i]->emit(regs.first, regs.second);
             }
 
             // loop_advance()
@@ -166,20 +189,27 @@ void CPUGenerator::generate_tile(std::shared_ptr<ngraph::Function>& f) const {
 
     h->L(for_body[nloads.size()]);
 #endif
+
+    h->postamble();
+    for (int loopId = 0; loopId < nloads.size(); loopId++) {
+        for (size_t i = 0; i < lowered_ops[loopId].size(); i++) {
+            lowered_ops[loopId][i]->emit_table();
+        }
+    }
 }
 
 void CPUGenerator::generate_return(std::shared_ptr<ngraph::Function>& f) const {
-    h->postamble();
-#if 1
-    h->align(64);
-    h->L(l_table);
+//     h->postamble();
+// #if 1
+//     // h->align(64);
+//     // h->L(l_table);
 
-    for (auto n : f->get_ordered_ops()) {
-        if (jitters.find(n->get_type_info()) != jitters.end()) {
-            jitters[n->get_type_info()](n)->emit_table();
-        } else {
-            throw ngraph::ngraph_error(std::string("unknown operation ") + n->get_type_info().name);
-        }
-    }
-#endif
+//     for (auto n : f->get_ordered_ops()) {
+//         if (jitters.find(n->get_type_info()) != jitters.end()) {
+//             jitters[n->get_type_info()](n)->emit_table();
+//         } else {
+//             throw ngraph::ngraph_error(std::string("unknown operation ") + n->get_type_info().name);
+//         }
+//     }
+// #endif
 }
