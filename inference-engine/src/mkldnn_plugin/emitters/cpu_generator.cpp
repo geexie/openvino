@@ -48,6 +48,10 @@ CPUGenerator::CPUGenerator() : h(new jit_snippet()), isa(mkldnn::impl::cpu::avx2
     // jitters[ngraph::op::Nop().get_type_info()] = CREATE_EMITTER(NopEmitter); // Not supported
     // jitters[ngraph::opset1::Broadcast().get_type_info()] = CREATE_EMITTER(); // Not supported
 
+    // jitters[ngraph::opset1::Convert().get_type_info()] = CREATE_EMITTER(); // Not supported
+    // it might be better to decompose it, but standart do_decompose algorithm use Quantize which is deprecated
+    // jitters[ngraph::opset1::FakeQuantize().get_type_info()] = CREATE_EMITTER(); // not supported
+
     // binary
     jitters[ngraph::opset1::Add().get_type_info()] = CREATE_EMITTER(MKLDNNPlugin::jit_add_emitter);
     jitters[ngraph::opset1::Divide().get_type_info()] = CREATE_EMITTER(MKLDNNPlugin::jit_divide_emitter);
@@ -69,7 +73,7 @@ CPUGenerator::CPUGenerator() : h(new jit_snippet()), isa(mkldnn::impl::cpu::avx2
     jitters[ngraph::opset1::PRelu().get_type_info()] = CREATE_EMITTER(MKLDNNPlugin::jit_prelu_emitter);
     jitters[ngraph::opset1::SquaredDifference().get_type_info()] = CREATE_EMITTER(MKLDNNPlugin::jit_squared_difference_emitter);
     jitters[ngraph::opset1::Subtract().get_type_info()] = CREATE_EMITTER(MKLDNNPlugin::jit_subtract_emitter);
-    // jitters[ngraph::opset1::Xor().get_type_info()] = CREATE_EMITTER(); // not supported
+    jitters[ngraph::opset1::Xor().get_type_info()] = CREATE_EMITTER(MKLDNNPlugin::jit_logical_xor_emitter);
 
     // unary
     jitters[ngraph::opset1::Abs().get_type_info()] = CREATE_EMITTER(MKLDNNPlugin::jit_mkldnn_abs_emitter);
@@ -98,6 +102,10 @@ CPUGenerator::CPUGenerator() : h(new jit_snippet()), isa(mkldnn::impl::cpu::avx2
 
     // jitters[ngraph::opset1::HardSigmoid().get_type_info()] = CREATE_EMITTER(); // not supported
     // jitters[ngraph::opset1::Selu().get_type_info()] = CREATE_EMITTER(); // not supported
+
+    // Also set tile jitter here.
+    // jitters[ngraph::op::Subgraph().get_type_info()] = CREATE_EMITTER(SubgraphEmitter);
+    // jitters[ngraph::op::Tile().get_type_info()] = CREATE_EMITTER(SubgraphEmitter);
 }
 
 code CPUGenerator::generate(std::shared_ptr<ngraph::Function>& f) const {
@@ -107,69 +115,23 @@ code CPUGenerator::generate(std::shared_ptr<ngraph::Function>& f) const {
         throw ngraph::ngraph_error("unsupported architecture for code genration");
     }
 
-    generate_propotype(f);
+    int qqq = 0;
+    for (auto op : f->get_ordered_ops()) {
+        remark(13) << "op " << qqq++ << " " << op->get_friendly_name() << " (" << op->get_type_name() << ") " << op << std::endl;
+    }
+
     generate_tile(f);
-    generate_return(f);
+
     return h->getCode();
 }
 
-void CPUGenerator::generate_propotype(std::shared_ptr<ngraph::Function>& f) const {
-    // Note: should it be also a pass?
-    h->preamble();
-
-    auto params = f->get_parameters();
-    auto results = f->get_results();
-
-    std::vector<Xbyak::Reg64> regs(params.size()+results.size());
-    for (auto i = 0; i < regs.size(); i++) {
-        regs[i] = Xbyak::Reg64(reg64_tmp_start+i);
-    }
-
-    for (auto i = 0; i < params.size(); i++) {
-        h->mov(regs[i], h->ptr[param + i*sizeof(size_t)]);
-    }
-
-    for (auto i = 0; i < results.size(); i++) {
-        h->mov(regs[params.size()+i], h->ptr[param + (params.size()+i)*sizeof(size_t)]);
-    }
-
-    size_t nConstants = 0;
-    for (auto op : f->get_ordered_ops()) {
-        if (auto constant = as_type_ptr<ngraph::opset1::Constant>(op)) {
-            // Setup non-scalar constant for load
-            if (constant->output(0).get_tensor().get_shape() != Shape() && ngraph::shape_size(constant->output(0).get_tensor().get_shape()) > 1) {
-                remark(12) << "setting constant to " << regs.size()+1+nConstants << " "
-                          << std::hex << reinterpret_cast<size_t>(&constant->get_data_ptr<float>()[0]) << " "
-                          << std::dec << constant->get_data_ptr<float>()[0]<< std::endl;
-                h->mov(Xbyak::Reg64(reg64_tmp_start+regs.size()+1+nConstants),
-                    /*reinterpret_cast<size_t>(&constant->get_data_ptr<float>()[0])*/
-                    h->ptr[param + (params.size()+results.size()+1+nConstants)*sizeof(size_t)]);
-                nConstants++;
-            }
-        }
-    }
-
-    if (params.size()+results.size()+nConstants+1 > 8) {
-        throw ngraph_error(std::string("snippet signature should not exceed 7 arguments. got") + std::to_string(params.size()+results.size()+nConstants));
-    }
-}
+ void CPUGenerator::generate_snippet(std::shared_ptr<ngraph::Function>& f) const {
+ }
 
 void CPUGenerator::generate_tile(std::shared_ptr<ngraph::Function>& f) const {
-    auto f_scalar = ngraph::clone_function(*f.get());
-    ngraph::pass::ReplaceLoadsWithScalarLoads().run_on_function(f_scalar);
-    int qqq = 0;
-    for (auto op : f_scalar->get_ordered_ops()) {
-        remark(13) << "op " << qqq++ << " " << op->get_friendly_name() << " (" << op->get_type_name() << ") " << op << std::endl;
-    }
-    qqq = 0;
-    for (auto op : f->get_ordered_ops()) {
-        remark(13) << "op " << qqq++ << " " << op->get_friendly_name() << " (" << op->get_type_name() << ") " << op << std::endl;
-    }
-
+    /// vector tile
     std::vector<std::shared_ptr<Emitter>> lowered;
-    std::vector<std::shared_ptr<Emitter>> scalar_lowered;
     std::vector<RegInfo> reginfo;
-    std::vector<RegInfo> scalar_reginfo;
 
     for (auto n : f->get_ordered_ops()) {
         reginfo.push_back(ngraph::snippet::getRegisters(n));
@@ -180,12 +142,48 @@ void CPUGenerator::generate_tile(std::shared_ptr<ngraph::Function>& f) const {
         }
     }
 
+    // scalar tile
+    auto f_scalar = ngraph::clone_function(*f.get());
+    ngraph::pass::ReplaceLoadsWithScalarLoads().run_on_function(f_scalar);
+
+    int qqq = 0;
+    for (auto op : f_scalar->get_ordered_ops()) {
+        remark(13) << "op " << qqq++ << " " << op->get_friendly_name() << " (" << op->get_type_name() << ") " << op << std::endl;
+    }
+
+    std::vector<std::shared_ptr<Emitter>> scalar_lowered;
+    std::vector<RegInfo> scalar_reginfo;
+
     for (auto n : f_scalar->get_ordered_ops()) {
         scalar_reginfo.push_back(ngraph::snippet::getRegisters(n));
         if (jitters.find(n->get_type_info()) != jitters.end()) {
             scalar_lowered.push_back(jitters[n->get_type_info()](n));
         } else {
             throw ngraph::ngraph_error(std::string("unknown operation ") + n->get_type_info().name);
+        }
+    }
+
+    h->preamble();
+
+    auto params = f->get_parameters();
+    auto results = f->get_results();
+
+    if (params.size()+results.size() > 7) {
+        throw ngraph_error(std::string("snippet signature should not exceed 7 arguments. got") + std::to_string(params.size()+results.size()));
+    }
+
+    {
+        std::vector<Xbyak::Reg64> regs(params.size()+results.size());
+        for (auto i = 0; i < regs.size(); i++) {
+            regs[i] = Xbyak::Reg64(reg64_tmp_start+i);
+        }
+
+        for (auto i = 0; i < params.size(); i++) {
+            h->mov(regs[i], h->ptr[param + i*sizeof(size_t)]);
+        }
+
+        for (auto i = 0; i < results.size(); i++) {
+            h->mov(regs[params.size()+i], h->ptr[param + (params.size()+i)*sizeof(size_t)]);
         }
     }
 
@@ -214,11 +212,10 @@ void CPUGenerator::generate_tile(std::shared_ptr<ngraph::Function>& f) const {
 
         // loop_body()
         h->L(for_body[loopId]); {
-            for (size_t i = 0; i < lowered_ops[loopId].size(); i++) {
-                auto regs = reginfos[loopId][i];
-                lowered_ops[loopId][i]->emit(regs.first, regs.second);
-            }
-
+        for (size_t i = 0; i < lowered_ops[loopId].size(); i++) {
+            auto regs = reginfos[loopId][i];
+            lowered_ops[loopId][i]->emit(regs.first, regs.second);
+        }
             // loop_advance()
             h->sub(amount, nloads[loopId]);
             h->cmp(amount, nloads[loopId]);
@@ -235,7 +232,4 @@ void CPUGenerator::generate_tile(std::shared_ptr<ngraph::Function>& f) const {
             lowered_ops[loopId][i]->emit_table();
         }
     }
-}
-
-void CPUGenerator::generate_return(std::shared_ptr<ngraph::Function>& f) const {
 }

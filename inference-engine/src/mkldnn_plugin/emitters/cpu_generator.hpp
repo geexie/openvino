@@ -34,6 +34,8 @@ public:
     mkldnn::impl::cpu::cpu_isa_t host_isa;
 };
 
+/// Scheduling is responsibility of plugin. CodeGen should describe the tile it produced in terms of internal and external
+/// dimensions or something as well as execution ABI.
 class TRANSFORMATIONS_API CPUGenerator : public Generator {
 public:
     CPUGenerator();
@@ -42,9 +44,8 @@ public:
     code generate(std::shared_ptr<Function>& f) const override;
 
 protected:
-    void generate_propotype(std::shared_ptr<ngraph::Function>& f) const override;
-    void generate_tile(std::shared_ptr<ngraph::Function>& f) const override;
-    void generate_return(std::shared_ptr<ngraph::Function>& f) const override;
+    void generate_snippet(std::shared_ptr<ngraph::Function>& body) const override;
+    void generate_tile(std::shared_ptr<ngraph::Function>& body) const override;
 
 private:
     // FIXME: use TargetMachine or something

@@ -17,6 +17,8 @@
 #include "ngraph/descriptor/tensor.hpp"
 #include "ngraph/node.hpp"
 
+#include <numeric>
+
 using namespace ngraph;
 using namespace std;
 
@@ -27,7 +29,9 @@ descriptor::Tensor::Tensor(const element::Type& element_type,
     , m_shape(pshape.is_static() ? pshape.to_shape() : Shape{})
     , m_partial_shape(pshape)
     , m_name(name)
+    , m_axises(m_shape.size())
 {
+    std::iota(m_axises.begin(), m_axises.end(), 0);
 }
 
 descriptor::Tensor::Tensor(const element::Type& element_type,
@@ -39,12 +43,21 @@ descriptor::Tensor::Tensor(const element::Type& element_type,
     , m_partial_shape(pshape)
     , m_node(node)
     , m_node_output_number(node_output_number)
+    , m_axises(m_shape.size())
 {
+    std::iota(m_axises.begin(), m_axises.end(), 0);
 }
 
 void descriptor::Tensor::set_name(const string& name)
 {
     m_name = name;
+}
+
+void descriptor::Tensor::set_tensor_blocking(const element::Type& element_type,
+                                             const PartialShape& pshape,
+                                             const AxisVector& axises) {
+    set_tensor_type(element_type, pshape);
+    m_axises = axises;
 }
 
 void descriptor::Tensor::set_tensor_type(const element::Type& element_type,

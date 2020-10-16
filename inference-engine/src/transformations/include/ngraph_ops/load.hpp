@@ -150,5 +150,23 @@ public:
 private:
 };
 
+class TRANSFORMATIONS_API LEA : public Op {
+public:
+    static constexpr NodeTypeInfo type_info{"LEA", 0};
+    const NodeTypeInfo& get_type_info() const override { return type_info; }
+
+    LEA(const Output<Node>& x);
+    LEA() = default;
+
+    std::shared_ptr<Node> clone_with_new_inputs(const OutputVector& new_args) const override {
+        check_new_args_count(this, new_args);
+        return std::make_shared<LEA>(new_args.at(0));
+    }
+
+    void validate_and_infer_types() override;
+    bool evaluate(const HostTensorVector& output_values, const HostTensorVector& input_values) const override;
+private:
+};
+
 } // namespace op
 } // namespace ngraph

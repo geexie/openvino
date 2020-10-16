@@ -30,6 +30,40 @@ static inline auto getEA(const std::shared_ptr<ngraph::Node>& n) -> size_t {
     return ea;
 }
 
+class SubgraphEmitter : public MKLDNNPlugin::jit_emitter {
+public:
+    SubgraphEmitter(mkldnn::impl::cpu::jit_generator* h, mkldnn::impl::cpu::cpu_isa_t isa, const std::shared_ptr<ngraph::Node>& n)
+    : jit_emitter(h, isa, n) {
+        remark(10) << "SubgraphEmitter: " << n->get_friendly_name() << n->get_type_info().name << std::endl;
+    }
+
+    size_t get_inputs_num() override {return 0;}
+
+private:
+    void emit_impl(const std::vector<size_t>& in,
+                   const std::vector<size_t>& out,
+                   const std::vector<size_t>& pool = {},
+                   const std::vector<size_t>& gpr  = {}) const override {
+    }
+};
+
+class TileEmitter : public MKLDNNPlugin::jit_emitter {
+public:
+    TileEmitter(mkldnn::impl::cpu::jit_generator* h, mkldnn::impl::cpu::cpu_isa_t isa, const std::shared_ptr<ngraph::Node>& n)
+    : jit_emitter(h, isa, n) {
+        remark(10) << "SubgraphEmitter: " << n->get_friendly_name() << n->get_type_info().name << std::endl;
+    }
+
+    size_t get_inputs_num() override {return 0;}
+
+private:
+    void emit_impl(const std::vector<size_t>& in,
+                   const std::vector<size_t>& out,
+                   const std::vector<size_t>& pool = {},
+                   const std::vector<size_t>& gpr  = {}) const override {
+    }
+};
+
 class NopEmitter : public MKLDNNPlugin::jit_emitter {
 public:
     NopEmitter(mkldnn::impl::cpu::jit_generator* h, mkldnn::impl::cpu::cpu_isa_t isa, const std::shared_ptr<ngraph::Node>& n)
@@ -103,6 +137,9 @@ private:
 };
 
 /// Assumption that every parameter loaded from memory only one should be correct
+/// Every parameter loaded from memory once. Broadcast doesn’t need post increment.
+/// For scalar loads we can use different tiles. Tiling indeed can be arbitrary and post increment should be somehow coded into ISA.
+/// Blocked parameter to tell if input is actually blocked. Broadcast means broadcast by W in other cases no need to substitute load.
 class LoadEmitter : public MKLDNNPlugin::jit_emitter {
 public:
     LoadEmitter(mkldnn::impl::cpu::jit_generator* h, mkldnn::impl::cpu::cpu_isa_t isa, const std::shared_ptr<ngraph::Node>& n)
@@ -241,6 +278,41 @@ public:
 
         push_arg_entry_of("scalar", value, false);
         prepare_table();
+    }
+    size_t get_inputs_num() override {return 0;}
+
+protected:
+    size_t aux_gprs_count() const override {return 1;}
+
+private:
+    void emit_impl(const std::vector<size_t>& in,
+              const std::vector<size_t>& out,
+              const std::vector<size_t>& pool = {},
+              const std::vector<size_t>& gpr  = {}) const override {
+        remark(11) << " scalar constant" << std::endl;
+        Xbyak::Ymm vmm = Xbyak::Ymm(out[0]);
+        h->uni_vbroadcastss(vmm, table_val("scalar"));
+        remark(11) << "    -> " << out[0] << " = const (" << ")" << std::endl;
+    }
+
+private:
+    size_t offset;
+    int32_t value;
+};
+
+class ConvertEmitter : public MKLDNNPlugin::jit_emitter {
+public:
+    ConvertEmitter(mkldnn::impl::cpu::jit_generator* h, mkldnn::impl::cpu::cpu_isa_t isa, const std::shared_ptr<ngraph::Node>& n)
+    : jit_emitter(h, isa, n), offset(getTableOffset(n))  {
+        // auto out_shape = n->output(0).get_tensor().get_shape();
+        // remark(10) << "ScalarEmitter: " << n->get_friendly_name() << " " << n->get_type_info().name << " " << out_shape << std::endl;
+        // if (out_shape == ngraph::Shape() || ngraph::shape_size(out_shape) == 1) {
+        //     remark(11) << "pugging constant " << ngraph::as_type_ptr<ngraph::op::Scalar>(n)->cast_vector<float>()[0] << " to the stack" << std::endl;
+        //     value = mkldnn::impl::cpu::float2int(ngraph::as_type_ptr<ngraph::op::Scalar>(n)->cast_vector<float>()[0]);
+        // }
+
+        // push_arg_entry_of("scalar", value, false);
+        // prepare_table();
     }
     size_t get_inputs_num() override {return 0;}
 

@@ -21,6 +21,7 @@
 
 #include "ngraph/partial_shape.hpp"
 #include "ngraph/shape.hpp"
+#include "ngraph/axis_vector.hpp"
 #include "ngraph/type/element_type.hpp"
 
 namespace ngraph
@@ -49,10 +50,15 @@ namespace ngraph
             void set_tensor_type(const element::Type& element_type, const PartialShape& pshape);
             void set_element_type(const element::Type& elemenet_type);
             void set_partial_shape(const PartialShape& partial_shape);
+            void set_tensor_blocking(const element::Type& element_type, const PartialShape& pshape, const AxisVector& axies);
 
             const element::Type& get_element_type() const { return m_element_type; }
             const Shape& get_shape() const;
             const PartialShape& get_partial_shape() const { return m_partial_shape; }
+            const AxisVector& get_axises() const { return m_axises; }
+            void set_pool_offset(size_t);
+            size_t get_pool_offset() const;
+
             size_t size() const;
 
         protected:
@@ -68,6 +74,9 @@ namespace ngraph
             size_t m_node_output_number{0};
 
             std::string m_name;
+            size_t m_pool_offset{0};
+
+            AxisVector m_axises;
         };
 
         NGRAPH_API

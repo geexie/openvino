@@ -162,6 +162,7 @@ void op::Subgraph::canonicalize(const BlockedShapeVector& output_shapes, const B
     }
 
     // it should be in subgraph node to be aligned with internal and external parameter list, but adding this for testing
+    // FIXME: store blocking into to Parameter's rt_info for future propagation
     for (int i = 0; i < m_body->get_parameters().size(); i++) {
         auto param = m_body->get_parameters()[i];
         if (param->get_shape().size() < 4) {
@@ -186,6 +187,12 @@ void op::Subgraph::canonicalize(const BlockedShapeVector& output_shapes, const B
     }
 
     m_body->validate_nodes_and_infer_types();
+
+    // FIXME: add `AxisVector` propagation pass.
+    for (auto op : m_body->get_ordered_ops()) {
+        // propagate rt_info from parents to current node & check compatibility
+    }
+
 
     for (int i = 0; i < m_body->get_results().size(); i++) {
         auto result = m_body->get_results()[i];
@@ -242,7 +249,11 @@ void op::Subgraph::canonicalize(const BlockedShapeVector& output_shapes, const B
 
 void op::Subgraph::convert_to_snippet_dialect() {
     ngraph::pass::Manager manager;
+    // FIXME: add support
+    // manager.register_pass<ngraph::pass::DecomposeFakeQuantizePass>();
+    // manager.register_pass<ngraph::pass::InsertExplicitLeaPass>();
     manager.register_pass<ngraph::pass::InsertExplicitLoadsPass>();
+    // FIXME:
     manager.register_pass<ngraph::pass::InsertExplicitFakeBroadcastPass>();
     manager.register_pass<ngraph::pass::MergeLoadFakeBroadcastToBroadcastLoadPass>();
     manager.run_passes(m_body);

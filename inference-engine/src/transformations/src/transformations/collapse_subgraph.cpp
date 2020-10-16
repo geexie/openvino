@@ -359,8 +359,8 @@ ngraph::pass::CollapseSubgraph::CollapseSubgraph(bool tokenize_by_node) : GraphR
             || !!as_type_ptr<opset1::PRelu>(n)
             || !!as_type_ptr<opset1::Power>(n)
             || !!as_type_ptr<opset1::SquaredDifference>(n)
-            || !!as_type_ptr<opset1::Subtract>(n);
-            // || !!as_type_ptr<opset1::Xor>(n);
+            || !!as_type_ptr<opset1::Subtract>(n)
+            || !!as_type_ptr<opset1::Xor>(n);
     };
 
     auto is_lou = [](std::shared_ptr<Node> n) -> bool {
@@ -369,19 +369,19 @@ ngraph::pass::CollapseSubgraph::CollapseSubgraph(bool tokenize_by_node) : GraphR
             // || !!as_type_ptr<opset1::Acos>(n)
             // || !!as_type_ptr<opset1::Asin>(n)
             // || !!as_type_ptr<opset1::Atan>(n)
-            // || !!as_type_ptr<opset1::Ceiling>(n)
+            // || !!as_type_ptr<opset1::Ceiling>(n) ?
             || !!as_type_ptr<opset1::Clamp>(n)
             // || !!as_type_ptr<opset1::Cos>(n)
             // || !!as_type_ptr<opset1::Cosh>(n)
             || !!as_type_ptr<opset1::Elu>(n)
             || !!as_type_ptr<opset1::Erf>(n)
             || !!as_type_ptr<opset1::Exp>(n)
-            // || !!as_type_ptr<opset1::Floor>(n)
-            // || !!as_type_ptr<opset1::Log>(n)
+            // || !!as_type_ptr<opset1::Floor>(n) ?
+            // || !!as_type_ptr<opset1::Log>(n) ?
             || !!as_type_ptr<opset1::LogicalNot>(n)
             || !!as_type_ptr<opset1::Negative>(n)
             || !!as_type_ptr<opset1::Relu>(n)
-            // || !!as_type_ptr<opset1::Sign>(n)
+            // || !!as_type_ptr<opset1::Sign>(n) ?
             || !!as_type_ptr<opset1::Sigmoid>(n)
             // || !!as_type_ptr<opset1::Sin>(n)
             // || !!as_type_ptr<opset1::Sinh>(n)
@@ -396,7 +396,12 @@ ngraph::pass::CollapseSubgraph::CollapseSubgraph(bool tokenize_by_node) : GraphR
             || !!as_type_ptr<opset1::Selu>(n); // ternary with 2 constants / or DW
     };
 
-    auto is_lo = [is_lou, is_lob](std::shared_ptr<Node> n) -> bool { return is_lou(n) || is_lob(n); };
+    auto is_fq = [](std::shared_ptr<Node> n) -> bool {
+        using ngraph::as_type_ptr;
+        return !!as_type_ptr<opset1::FakeQuantize>(n); // 4->1
+    };
+
+    auto is_lo = [is_lou, is_lob, is_lot, is_fq](std::shared_ptr<Node> n) -> bool { return is_lou(n) || is_lob(n) || is_lot(n) || is_fq(n); };
 
     this->add_matcher(std::make_shared<pattern::Matcher>(
         std::make_shared<pattern::op::Label>(pattern::any_input(),

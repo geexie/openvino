@@ -14,6 +14,53 @@
 // FIXME: use linear time register allocation algorithm
 // Assigning internal `vector` register indexes to Ops (virtual registers)
 bool ngraph::pass::AssignRegistersPass::run_on_function(std::shared_ptr<Function> f) {
+    // {
+    //     using Reg = size_t;
+    //     auto ops = f->get_ordered_ops();
+    //     size_t rdx = 0;
+
+    //     std::map<std::shared_ptr<descriptor::Tensor>, Reg> regs;
+    //     for (auto op : ops) {
+    //         if (std::dynamic_pointer_cast<opset1::Parameter>(op) || std::dynamic_pointer_cast<opset1::Result>(op)) {
+    //             continue;
+    //         }
+
+    //         for (auto output : op->outputs()) {
+    //             regs[output.get_tensor_ptr()] = rdx++;
+    //         }
+    //     }
+
+    //     for (auto r : regs) {
+    //         std::cout << r.first << " " << r.second << std::endl;
+    //     }
+
+    //     std::vector<std::set<Reg>> used;
+    //     std::vector<std::set<Reg>> def;
+
+    //     for (auto op : ops) {
+    //         if (std::dynamic_pointer_cast<opset1::Parameter>(op) || std::dynamic_pointer_cast<opset1::Result>(op)) {
+    //             continue;
+    //         }
+
+    //         std::set<Reg> u;
+    //         for (auto input : op->inputs()) {
+    //             u.insert(regs[input.get_tensor_ptr()]);
+    //         }
+    //         used.push_back(u);
+
+    //         std::set<Reg> d;
+    //         for (auto output : op->outputs()) {
+    //             d.insert(regs[output.get_tensor_ptr()]);
+    //         }
+    //         def.push_back(d);
+    //     }
+
+    //     for (auto u : used) {
+    //         for (auto )
+    //         std::cout << std::endl;
+    //     }
+    // }
+
     size_t idx_start = 0;
     size_t idx_max = 15;
     size_t constantID = 0;
@@ -51,7 +98,9 @@ bool ngraph::pass::AssignRegistersPass::run_on_function(std::shared_ptr<Function
         std::vector<size_t> regs; regs.reserve(n->outputs().size());
         for (auto output : n->outputs()) {
             if (idx_start > idx_max) {
-                throw ngraph::ngraph_error(std::string("cannot allocate register for ") + n->get_friendly_name());
+                idx_start = 0;
+                // FIXME: implement somewhat notmal register allocation logic
+                // throw ngraph::ngraph_error(std::string("cannot allocate register for ") + n->get_friendly_name());
             }
             regs.push_back(idx_start);
             idx_start++;

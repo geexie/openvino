@@ -12,6 +12,7 @@ namespace snippet {
 
 using code = const uint8_t *;
 using RegInfo = std::pair<std::vector<size_t>, std::vector<size_t>>;
+
 TRANSFORMATIONS_API auto getRegisters(std::shared_ptr<ngraph::Node>& n) -> ngraph::snippet::RegInfo;
 
 class TargetMachine {
@@ -42,17 +43,20 @@ public:
     virtual code generate(std::shared_ptr<Function>& f) const = 0;
 
 protected:
-    // those might be too platform specific
-    // FIXME: make prototype & module peramble/postamble to be a part of opset as well as more auxary things like function signature generation
-    // How is to make it before parameters? should it be part of the module? like module is a functions + signature + return or what...
-    virtual void generate_propotype(std::shared_ptr<ngraph::Function>& f) const = 0;
-
-    // FIXME: move main loop generation somewhere here
-    virtual void generate_tile(std::shared_ptr<ngraph::Function>& f) const = 0;
-
-    // FIXME: used to generate mable but can be anything make a part of opset as well
-    // How is to make it before parameters? should it be part of the module?
-    virtual void generate_return(std::shared_ptr<ngraph::Function>& f) const = 0;
+    // hierarchical IR
+    // -snippet - vector of tiles
+    //  - tile - single body ~ subgraph
+    //   - body
+    //     - op
+    //     - op
+    //     - op
+    // - tile
+    //  - body
+    //    - op
+    //    - op
+    //    - op
+    virtual void generate_snippet(std::shared_ptr<ngraph::Function>& body) const = 0;
+    virtual void generate_tile(std::shared_ptr<ngraph::Function>& body) const = 0;
 
     mutable std::map<const ngraph::DiscreteTypeInfo, std::function<std::shared_ptr<Emitter>(std::shared_ptr<ngraph::Node>)>> jitters;
 };

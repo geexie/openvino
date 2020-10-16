@@ -74,6 +74,8 @@ private:
     std::shared_ptr<Function> m_body;
     std::vector<std::shared_ptr<opset1::Constant>> m_constants;
 
+    std::vector<std::shared_ptr<Function>> tiles;
+
     Shape work_size;
     bool canBeLinearized {false};
 
@@ -105,6 +107,10 @@ static inline auto build_subgraph(const std::shared_ptr<ngraph::Node>& node, con
     subgraph->set_friendly_name(node->get_friendly_name());
     return subgraph;
 };
+
+// class TRANSFORMATIONS_API Snippet : public Subgraph {
+
+// };
 
 }  // namespace op
 
