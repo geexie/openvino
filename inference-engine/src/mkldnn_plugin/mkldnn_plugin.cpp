@@ -319,6 +319,8 @@ Engine::LoadExeNetworkImpl(const InferenceEngine::CNNNetwork &network, const std
         }
     }
 
+    auto status = clonedNetwork->serialize("after_legacy.xml", "after_legacy.bin", 0);
+    std::cout << "serialized with status " << status << " !!!!" << std::endl;
     return std::make_shared<MKLDNNExecNetwork>(*clonedNetwork, conf, extensionManager, weightsSharing);
 }
 
