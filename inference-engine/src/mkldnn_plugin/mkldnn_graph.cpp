@@ -226,9 +226,11 @@ void MKLDNNGraph::Replicate(const ICNNNetwork &network, const MKLDNNExtensionMan
 
     auto _parent_port = [] (const DataPtr &data) -> int {
         auto parent = getCreatorLayer(data).lock();
-        for (int i = 0; parent->outData.size(); i++)
-            if (data == parent->outData[i])
-                return i;
+        if (parent) {
+            for (int i = 0; parent->outData.size(); i++)
+                if (data == parent->outData[i])
+                    return i;
+        }
         return -1;
     };
 
@@ -335,7 +337,11 @@ void MKLDNNGraph::InitGraph() {
     SortTopologically();
     InitNodes();
 
+    // TODO: move to plugin config for detailed performance evaluation
+    // #define SNIPPETS_BENCMARK_UNFUSED
+    #if !defined(SNIPPETS_BENCMARK_UNFUSED)
     optimizer.ApplyCommonGraphOptimizations(*this);
+    #endif
     SortTopologically();
 
     InitDescriptors();

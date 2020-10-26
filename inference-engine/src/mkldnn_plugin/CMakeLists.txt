@@ -106,6 +106,8 @@ set(LAYERS
     ${CMAKE_CURRENT_SOURCE_DIR}/nodes/proposal.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/nodes/proposal_imp.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/nodes/cum_sum.cpp
+
+    ${CMAKE_CURRENT_SOURCE_DIR}/nodes/subgraph.cpp
 )
 
 foreach(LAYER ${LAYERS})
@@ -120,6 +122,7 @@ file(GLOB SOURCES
         ${CMAKE_CURRENT_SOURCE_DIR}/utils/*.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/utils/rt_info/*.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/nodes/common/*.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/emitters/*.cpp
         ${LAYERS}
         ${OS_SPECIFIC_SRC}
 )
@@ -135,6 +138,7 @@ file(GLOB HEADERS
         ${CMAKE_CURRENT_SOURCE_DIR}/nodes/*.hpp
         ${CMAKE_CURRENT_SOURCE_DIR}/nodes/common/*.h
         ${CMAKE_CURRENT_SOURCE_DIR}/nodes/common/*.hpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/emitters/*.hpp
 )
 
 addVersionDefines(mkldnn_plugin.cpp CI_BUILD_NUMBER MKL_VERSION)

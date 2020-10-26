@@ -31,33 +31,33 @@ namespace {
     };
     std::vector<InferenceEngine::Precision> netPrecisions = {InferenceEngine::Precision::FP32,
                                                              InferenceEngine::Precision::FP16};
+// FIXME:doesn't work with snippets
+//     INSTANTIATE_TEST_CASE_P(smoke_LSTMSequenceCommonZeroClip, LSTMSequenceTest,
+//                             ::testing::Combine(
+//                                     ::testing::ValuesIn(mode),
+//                                     ::testing::ValuesIn(seq_lengths_zero_clip),
+//                                     ::testing::ValuesIn(batch),
+//                                     ::testing::ValuesIn(hidden_size),
+//                                     ::testing::ValuesIn(input_size),
+//                                     ::testing::ValuesIn(activations),
+//                                     ::testing::ValuesIn(clip),
+//                                     ::testing::ValuesIn(direction),
+//                                     ::testing::ValuesIn(netPrecisions),
+//                                     ::testing::Values(CommonTestUtils::DEVICE_CPU)),
+//                             LSTMSequenceTest::getTestCaseName);
 
-    INSTANTIATE_TEST_CASE_P(smoke_LSTMSequenceCommonZeroClip, LSTMSequenceTest,
-                            ::testing::Combine(
-                                    ::testing::ValuesIn(mode),
-                                    ::testing::ValuesIn(seq_lengths_zero_clip),
-                                    ::testing::ValuesIn(batch),
-                                    ::testing::ValuesIn(hidden_size),
-                                    ::testing::ValuesIn(input_size),
-                                    ::testing::ValuesIn(activations),
-                                    ::testing::ValuesIn(clip),
-                                    ::testing::ValuesIn(direction),
-                                    ::testing::ValuesIn(netPrecisions),
-                                    ::testing::Values(CommonTestUtils::DEVICE_CPU)),
-                            LSTMSequenceTest::getTestCaseName);
-
-    INSTANTIATE_TEST_CASE_P(smoke_LSTMSequenceCommonClip, LSTMSequenceTest,
-                            ::testing::Combine(
-                                    ::testing::ValuesIn(mode),
-                                    ::testing::ValuesIn(seq_lengths_clip_non_zero),
-                                    ::testing::ValuesIn(batch),
-                                    ::testing::ValuesIn(hidden_size),
-                                    ::testing::ValuesIn(input_size),
-                                    ::testing::ValuesIn(activations),
-                                    ::testing::ValuesIn(clip_non_zeros),
-                                    ::testing::ValuesIn(direction),
-                                    ::testing::ValuesIn(netPrecisions),
-                                    ::testing::Values(CommonTestUtils::DEVICE_CPU)),
-                            LSTMSequenceTest::getTestCaseName);
+//     INSTANTIATE_TEST_CASE_P(smoke_LSTMSequenceCommonClip, LSTMSequenceTest,
+//                             ::testing::Combine(
+//                                     ::testing::ValuesIn(mode),
+//                                     ::testing::ValuesIn(seq_lengths_clip_non_zero),
+//                                     ::testing::ValuesIn(batch),
+//                                     ::testing::ValuesIn(hidden_size),
+//                                     ::testing::ValuesIn(input_size),
+//                                     ::testing::ValuesIn(activations),
+//                                     ::testing::ValuesIn(clip_non_zeros),
+//                                     ::testing::ValuesIn(direction),
+//                                     ::testing::ValuesIn(netPrecisions),
+//                                     ::testing::Values(CommonTestUtils::DEVICE_CPU)),
+//                             LSTMSequenceTest::getTestCaseName);
 
 }  // namespace

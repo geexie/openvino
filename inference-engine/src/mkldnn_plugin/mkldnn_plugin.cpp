@@ -34,6 +34,13 @@
 
 #include <transformations/common_optimizations/common_optimizations.hpp>
 #include <transformations/common_optimizations/depth_to_space_fusion.hpp>
+#include "transformations/common_optimizations/hsigmoid_fusion.hpp"
+#include "transformations/common_optimizations/hswish_fusion.hpp"
+#include "transformations/common_optimizations/mish_fusion.hpp"
+#include "transformations/common_optimizations/softplus_fusion.hpp"
+#include "transformations/common_optimizations/softplus_to_mish_fusion.hpp"
+#include "transformations/common_optimizations/swish_fusion.hpp"
+#include "transformations/common_optimizations/conv_mul_fusion.hpp"
 #include <transformations/op_conversions/convert_depth_to_space.hpp>
 #include <transformations/op_conversions/convert_space_to_depth.hpp>
 #include <transformations/op_conversions/convert_gelu.hpp>
@@ -57,6 +64,8 @@
 #include <transformations/convert_precision.hpp>
 #include <transformations/init_node_info.hpp>
 #include <transformations/rt_info/fused_names_attribute.hpp>
+#include <transformations/collapse_subgraph.hpp>
+#include <ngraph_ops/subgraph.hpp>
 
 #include <ngraph/opsets/opset2.hpp>
 #include <ngraph/opsets/opset3.hpp>
@@ -71,18 +80,21 @@
 # include <low_precision/group_convolution.hpp>
 # include <low_precision/multiply_to_group_convolution.hpp>
 
-#if !defined(__arm__) && !defined(_M_ARM) && !defined(__aarch64__) && !defined(_M_ARM64)
-#if defined(_WIN32) || defined(WIN32)
-#include <intrin.h>
-#include <windows.h>
-#else
-#include <cpuid.h>
-
+// WA for xbyak.h
+#ifdef _WIN32
+# ifndef _WINSOCKAPI_
+#  define _WINSOCKAPI_
+# endif
+# ifndef _WINSOCK2API_
+#  define _WINSOCK2API_
 #endif
 #endif
+#include <cpu_isa_traits.hpp>
 
 using namespace MKLDNNPlugin;
 using namespace InferenceEngine;
+
+// #define DUMP_TOKENIZATION
 
 Engine::Engine() {
     _pluginName = "CPU";
@@ -193,15 +205,40 @@ static void Transformation(ICNNNetwork::Ptr& clonedNetwork, const Config& conf) 
                 return true;
             });
 
+    bool tokenizeSubgraphs = conf.tokenizationMode;
+    // if (conf.enforceBF16 == true /*|| conf.lpTransformsMode == Config::LPTransformsMode::On*/) {
+    //     // forse disable subgraph tokenization. SS doesn't support bf16 & int8 yet.
+    //     tokenizeSubgraphs = Config::TokenizationMode::Disabled;
+    // }
+
+    if (/*mkldnn::impl::cpu::mayiuse(mkldnn::impl::cpu::cpu_isa_t::avx512_common) ||*/ !mkldnn::impl::cpu::mayiuse(mkldnn::impl::cpu::cpu_isa_t::avx2)) {
+        // forse disable subgraph tokenization. SS supports only AVX2. Try AVX2 on AVX512 for debug purpose
+        tokenizeSubgraphs = Config::TokenizationMode::Disabled;
+    }
+
     // List of enabled/disabled transformations
-    pass_config->disable<ngraph::pass::ConvertGELU>();
-    pass_config->disable<ngraph::pass::HSwishDecomposition>();
-    pass_config->disable<ngraph::pass::ReduceL1Decomposition>();
-    pass_config->disable<ngraph::pass::ReduceL2Decomposition>();
-    pass_config->disable<ngraph::pass::SoftPlusDecomposition>();
-    pass_config->disable<ngraph::pass::HSigmoidDecomposition>();
-    pass_config->disable<ngraph::pass::ConvertMod>();
-    pass_config->disable<ngraph::pass::LogSoftmaxDecomposition>();
+    // if (tokenizeSubgraphs == Config::TokenizationMode::Disabled) {
+        pass_config->disable<ngraph::pass::ConvertGELU>();
+        pass_config->disable<ngraph::pass::HSwishDecomposition>();
+        pass_config->disable<ngraph::pass::ReduceL1Decomposition>();
+        pass_config->disable<ngraph::pass::ReduceL2Decomposition>();
+        pass_config->disable<ngraph::pass::SoftPlusDecomposition>();
+        pass_config->disable<ngraph::pass::HSigmoidDecomposition>();
+        pass_config->disable<ngraph::pass::ConvertMod>();
+        pass_config->disable<ngraph::pass::LogSoftmaxDecomposition>();
+    // } else {
+        // pass_config->disable<ngraph::pass::MishFusion>();
+        // pass_config->disable<ngraph::pass::SoftPlusFusion>();
+        // pass_config->disable<ngraph::pass::SoftPlusToMishFusion>();
+        // pass_config->disable<ngraph::pass::SwishFusion>();
+        // pass_config->disable<ngraph::pass::HSigmoidFusion>();
+        // pass_config->disable<ngraph::pass::HSwishFusion>();
+
+        // pass_config->disable<ngraph::pass::ConvolutionMultiplyFusion>();
+        // pass_config->disable<ngraph::pass::GroupConvolutionMultiplyFusion>();
+        // pass_config->disable<ngraph::pass::ConvolutionBackpropDataMultiplyFusion>();
+        // pass_config->disable<ngraph::pass::GroupConvolutionBackpropDataMultiplyFusion>();
+    // }
     pass_config->disable<ngraph::pass::ConvertInterpolateToInterpOrResampleMatcher>();
 
     pass_config->enable<ngraph::pass::ConvertInterpolate1ToInterpolate4>();
@@ -224,6 +261,45 @@ static void Transformation(ICNNNetwork::Ptr& clonedNetwork, const Config& conf) 
                 LayerTransformation::Params(params).setPrecisionsOnActivations({ ngraph::element::u8 })));
 
         transformer.transform(nGraphFunc);
+    }
+
+    bool enableInt8 = conf.lpTransformsMode == Config::LPTransformsMode::On
+                    && ngraph::pass::low_precision::LowPrecisionTransformer::isFunctionQuantized(nGraphFunc);
+
+    if (conf.enforceBF16 == true || enableInt8) {
+        // forse disable subgraph tokenization. SS doesn't support bf16 & int8 yet.
+        tokenizeSubgraphs = Config::TokenizationMode::Disabled;
+    }
+
+    if (tokenizeSubgraphs != Config::TokenizationMode::Disabled) {
+#if defined (DUMP_TOKENIZATION)
+        std::cout << "Tokenization is ON" << std::endl;
+        for (auto op : nGraphFunc->get_ordered_ops()) {
+            std::cout << op << std::endl;
+            if (auto constant = ngraph::as_type_ptr<ngraph::opset1::Constant>(op)) {
+                std::cout << "constant value " << reinterpret_cast<const float*>(constant->get_data_ptr())[0] << std::endl;
+            }
+        }
+        ngraph::pass::VisualizeTree("original.svg").run_on_function(nGraphFunc);
+        std::cout << std::endl << std::endl;
+#endif
+        ngraph::pass::Manager tokenization_manager;
+        tokenization_manager.register_pass<ngraph::pass::CollapseSubgraph>(conf.tokenizationMode == Config::TokenizationMode::Node);
+        tokenization_manager.run_passes(nGraphFunc);
+#if defined (DUMP_TOKENIZATION)
+        for (auto op : nGraphFunc->get_ordered_ops()) {
+            std::cout << op << std::endl;
+        }
+        ngraph::pass::VisualizeTree("tokenized.svg").run_on_function(nGraphFunc);
+
+        int subgraph_index = 0;
+        for (auto op : nGraphFunc->get_ordered_ops()) {
+            std::cout << op << std::endl;
+            if (auto subgraph = ngraph::as_type_ptr<ngraph::op::Subgraph>(op)) {
+                ngraph::pass::VisualizeTree(std::string("subgraph")+std::to_string(subgraph_index++)+".svg").run_on_function(subgraph->get_body());
+            }
+        }
+#endif
     }
 
     ngraph::pass::Manager legacyManager;

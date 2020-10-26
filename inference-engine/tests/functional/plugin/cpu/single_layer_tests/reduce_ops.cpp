@@ -299,12 +299,12 @@ INSTANTIATE_TEST_CASE_P(
         ReduceCPULayerTest::getTestCaseName
 );
 
-INSTANTIATE_TEST_CASE_P(
-        smoke_ReduceLogicalOneAxis_CPU,
-        ReduceCPULayerTest,
-        paramsOneAxisLogical,
-        ReduceCPULayerTest::getTestCaseName
-);
+// INSTANTIATE_TEST_CASE_P(
+//         smoke_ReduceLogicalOneAxis_CPU,
+//         ReduceCPULayerTest,
+//         paramsOneAxisLogical,
+//         ReduceCPULayerTest::getTestCaseName
+// );
 
 INSTANTIATE_TEST_CASE_P(
         smoke_Reduce_ReductionTypes_CPU,

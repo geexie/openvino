@@ -59,6 +59,9 @@ namespace ngraph
                     m_autobroadcast = auto_broadcast;
                 }
 
+                bool evaluate(const HostTensorVector& ot,
+                              const HostTensorVector& it) const override;
+
             private:
                 AutoBroadcastSpec m_autobroadcast;
             };

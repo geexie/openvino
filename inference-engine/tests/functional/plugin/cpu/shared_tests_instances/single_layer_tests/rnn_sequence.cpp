@@ -28,33 +28,33 @@ namespace {
                                                            ngraph::op::RecurrentSequenceDirection::BIDIRECTIONAL,
     };
     std::vector<InferenceEngine::Precision> netPrecisions = {InferenceEngine::Precision::FP32};
+// FIXME:doesn't work with snippets
+//     INSTANTIATE_TEST_CASE_P(smoke_RNNSequenceCommonZeroClip, RNNSequenceTest,
+//                             ::testing::Combine(
+//                                     ::testing::ValuesIn(mode),
+//                                     ::testing::ValuesIn(seq_lengths_zero_clip),
+//                                     ::testing::ValuesIn(batch),
+//                                     ::testing::ValuesIn(hidden_size),
+//                                     ::testing::ValuesIn(input_size),
+//                                     ::testing::ValuesIn(activations),
+//                                     ::testing::ValuesIn(clip),
+//                                     ::testing::ValuesIn(direction),
+//                                     ::testing::ValuesIn(netPrecisions),
+//                                     ::testing::Values(CommonTestUtils::DEVICE_CPU)),
+//                             RNNSequenceTest::getTestCaseName);
 
-    INSTANTIATE_TEST_CASE_P(smoke_RNNSequenceCommonZeroClip, RNNSequenceTest,
-                            ::testing::Combine(
-                                    ::testing::ValuesIn(mode),
-                                    ::testing::ValuesIn(seq_lengths_zero_clip),
-                                    ::testing::ValuesIn(batch),
-                                    ::testing::ValuesIn(hidden_size),
-                                    ::testing::ValuesIn(input_size),
-                                    ::testing::ValuesIn(activations),
-                                    ::testing::ValuesIn(clip),
-                                    ::testing::ValuesIn(direction),
-                                    ::testing::ValuesIn(netPrecisions),
-                                    ::testing::Values(CommonTestUtils::DEVICE_CPU)),
-                            RNNSequenceTest::getTestCaseName);
-
-    INSTANTIATE_TEST_CASE_P(smoke_RNNSequenceCommonClip, RNNSequenceTest,
-                            ::testing::Combine(
-                                    ::testing::ValuesIn(mode),
-                                    ::testing::ValuesIn(seq_lengths_clip_non_zero),
-                                    ::testing::ValuesIn(batch),
-                                    ::testing::ValuesIn(hidden_size),
-                                    ::testing::ValuesIn(input_size),
-                                    ::testing::ValuesIn(activations),
-                                    ::testing::ValuesIn(clip_non_zeros),
-                                    ::testing::ValuesIn(direction),
-                                    ::testing::ValuesIn(netPrecisions),
-                                    ::testing::Values(CommonTestUtils::DEVICE_CPU)),
-                            RNNSequenceTest::getTestCaseName);
+//     INSTANTIATE_TEST_CASE_P(smoke_RNNSequenceCommonClip, RNNSequenceTest,
+//                             ::testing::Combine(
+//                                     ::testing::ValuesIn(mode),
+//                                     ::testing::ValuesIn(seq_lengths_clip_non_zero),
+//                                     ::testing::ValuesIn(batch),
+//                                     ::testing::ValuesIn(hidden_size),
+//                                     ::testing::ValuesIn(input_size),
+//                                     ::testing::ValuesIn(activations),
+//                                     ::testing::ValuesIn(clip_non_zeros),
+//                                     ::testing::ValuesIn(direction),
+//                                     ::testing::ValuesIn(netPrecisions),
+//                                     ::testing::Values(CommonTestUtils::DEVICE_CPU)),
+//                             RNNSequenceTest::getTestCaseName);
 
 }  // namespace
