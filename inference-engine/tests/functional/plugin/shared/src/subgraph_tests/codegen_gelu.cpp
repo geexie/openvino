@@ -24,7 +24,6 @@
 
 #include <transformations/init_node_info.hpp>
 #include <transformations/utils/utils.hpp>
-#include <transformations/convert_gelu.hpp>
 
 void visualize(const std::string& name, std::shared_ptr<ngraph::Function>& f) {
     ngraph::pass::VisualizeTree(name).run_on_function(f);
@@ -71,7 +70,6 @@ namespace LayerTestsDefinitions {
 
         if (useSubgraph) {
             ngraph::pass::InitNodeInfo().run_on_function(function);
-            ngraph::pass::ConvertGELU().run_on_function(function);
             ngraph::pass::ConstantFolding().run_on_function(function);
             visualize("gelu_decomposed.dot", function);
         }

@@ -4,7 +4,6 @@
 
 #include "subgraph.h"
 
-#include <ie_layers.h>
 #include <ie_parallel.hpp>
 
 #include <vector>

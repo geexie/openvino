@@ -26,7 +26,6 @@
 
 #include <transformations/init_node_info.hpp>
 #include <transformations/utils/utils.hpp>
-#include <transformations/convert_gelu.hpp>
 
 #include <ngraph_functions/utils/ngraph_helpers.hpp>
 
@@ -430,7 +429,6 @@ TEST(SnippetsTests, GenerateGelu) {
 
     // saveToDot("snippet_gelu0.dot", f);
     ngraph::pass::InitNodeInfo().run_on_function(f);
-    ngraph::pass::ConvertGELU().run_on_function(f);
     ngraph::pass::ConstantFolding().run_on_function(f);
     // saveToDot("snippet_gelu1.dot", f);
 
