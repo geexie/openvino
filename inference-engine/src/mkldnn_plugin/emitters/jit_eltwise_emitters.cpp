@@ -2,11 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-#include "common/emitter.h"
 #include "jit_eltwise_emitters.hpp"
-#include "mkldnn_eltwise_node.h"
 #include "jit_uni_eltwise.hpp"
-#include "legacy/ie_layers.h"
+#include <transformations/snippets/remarks.hpp>
 
 using namespace InferenceEngine;
 using namespace mkldnn::impl::utils;
@@ -16,13 +14,15 @@ using namespace Xbyak;
 namespace MKLDNNPlugin {
 
 /// ADD ///
-jit_add_emitter::jit_add_emitter(jit_generator *host, cpu_isa_t host_isa, const MKLDNNNode* node, Precision exec_prc)
+jit_add_emitter::jit_add_emitter(jit_generator *host, cpu_isa_t host_isa, const std::shared_ptr<ngraph::Node>& node, Precision exec_prc)
+: jit_emitter(host, host_isa, node, exec_prc) {}
+jit_add_emitter::jit_add_emitter(jit_generator *host, cpu_isa_t host_isa, const MKLDNNNode& node, Precision exec_prc)
 : jit_emitter(host, host_isa, node, exec_prc) {}
 
 size_t jit_add_emitter::get_inputs_num() { return 2; }
 
 void jit_add_emitter::emit_impl(const std::vector<size_t> &in_vec_idxs, const std::vector<size_t> &out_vec_idxs,
-                                const std::vector<size_t> &pool_vec_idxs, const std::vector<size_t> &pool_gpr_idxs) {
+                                const std::vector<size_t> &pool_vec_idxs, const std::vector<size_t> &pool_gpr_idxs) const {
     if (host_isa_ == cpu::sse42) {
         emit_isa<cpu::sse42>(in_vec_idxs, out_vec_idxs);
     } else if (host_isa_ == cpu::avx2) {
@@ -50,13 +50,15 @@ void jit_add_emitter::emit_isa(const std::vector<size_t> &in_vec_idxs, const std
 }
 
 /// MUL_ADD ///
-jit_mul_add_emitter::jit_mul_add_emitter(jit_generator *host, cpu_isa_t host_isa, const MKLDNNNode* node, Precision exec_prc)
+jit_mul_add_emitter::jit_mul_add_emitter(jit_generator *host, cpu_isa_t host_isa, const std::shared_ptr<ngraph::Node>& node, Precision exec_prc)
+: jit_emitter(host, host_isa, node, exec_prc) {}
+jit_mul_add_emitter::jit_mul_add_emitter(jit_generator *host, cpu_isa_t host_isa, const MKLDNNNode& node, Precision exec_prc)
 : jit_emitter(host, host_isa, node, exec_prc) {}
 
 size_t jit_mul_add_emitter::get_inputs_num() { return 3; }
 
 void jit_mul_add_emitter::emit_impl(const std::vector<size_t> &in_vec_idxs, const std::vector<size_t> &out_vec_idxs,
-                                    const std::vector<size_t> &pool_vec_idxs, const std::vector<size_t> &pool_gpr_idxs) {
+                                    const std::vector<size_t> &pool_vec_idxs, const std::vector<size_t> &pool_gpr_idxs) const {
     if (host_isa_ == cpu::sse42) {
         emit_isa<cpu::sse42>(in_vec_idxs, out_vec_idxs);
     } else if (host_isa_ == cpu::avx2) {
@@ -109,13 +111,15 @@ size_t jit_mul_add_emitter::aux_vecs_count() const {
 }
 
 /// SUB ///
-jit_subtract_emitter::jit_subtract_emitter(jit_generator *host, cpu_isa_t host_isa, const MKLDNNNode* node, Precision exec_prc)
+jit_subtract_emitter::jit_subtract_emitter(jit_generator *host, cpu_isa_t host_isa, const std::shared_ptr<ngraph::Node>& node, Precision exec_prc)
+: jit_emitter(host, host_isa, node, exec_prc) {}
+jit_subtract_emitter::jit_subtract_emitter(jit_generator *host, cpu_isa_t host_isa, const MKLDNNNode& node, Precision exec_prc)
 : jit_emitter(host, host_isa, node, exec_prc) {}
 
 size_t jit_subtract_emitter::get_inputs_num() { return 2; }
 
 void jit_subtract_emitter::emit_impl(const std::vector<size_t> &in_vec_idxs, const std::vector<size_t> &out_vec_idxs,
-                                const std::vector<size_t> &pool_vec_idxs, const std::vector<size_t> &pool_gpr_idxs) {
+                                const std::vector<size_t> &pool_vec_idxs, const std::vector<size_t> &pool_gpr_idxs) const {
     if (host_isa_ == cpu::sse42) {
         emit_isa<cpu::sse42>(in_vec_idxs, out_vec_idxs);
     } else if (host_isa_ == cpu::avx2) {
@@ -144,13 +148,15 @@ void jit_subtract_emitter::emit_isa(const std::vector<size_t> &in_vec_idxs, cons
 
 
 /// MULTIPLY ///
-jit_multiply_emitter::jit_multiply_emitter(jit_generator *host, cpu_isa_t host_isa, const MKLDNNNode* node, Precision exec_prc)
+jit_multiply_emitter::jit_multiply_emitter(jit_generator *host, cpu_isa_t host_isa, const std::shared_ptr<ngraph::Node>& node, Precision exec_prc)
+: jit_emitter(host, host_isa, node, exec_prc) {}
+jit_multiply_emitter::jit_multiply_emitter(jit_generator *host, cpu_isa_t host_isa, const MKLDNNNode& node, Precision exec_prc)
 : jit_emitter(host, host_isa, node, exec_prc) {}
 
 size_t jit_multiply_emitter::get_inputs_num() { return 2; }
 
 void jit_multiply_emitter::emit_impl(const std::vector<size_t> &in_vec_idxs, const std::vector<size_t> &out_vec_idxs,
-                                const std::vector<size_t> &pool_vec_idxs, const std::vector<size_t> &pool_gpr_idxs) {
+                                const std::vector<size_t> &pool_vec_idxs, const std::vector<size_t> &pool_gpr_idxs) const {
     if (host_isa_ == cpu::sse42) {
         emit_isa<cpu::sse42>(in_vec_idxs, out_vec_idxs);
     } else if (host_isa_ == cpu::avx2) {
@@ -179,13 +185,15 @@ void jit_multiply_emitter::emit_isa(const std::vector<size_t> &in_vec_idxs, cons
 
 
 /// DIVIDE ///
-jit_divide_emitter::jit_divide_emitter(jit_generator *host, cpu_isa_t host_isa, const MKLDNNNode* node, Precision exec_prc)
+jit_divide_emitter::jit_divide_emitter(jit_generator *host, cpu_isa_t host_isa, const std::shared_ptr<ngraph::Node>& node, Precision exec_prc)
+: jit_emitter(host, host_isa, node, exec_prc) {}
+jit_divide_emitter::jit_divide_emitter(jit_generator *host, cpu_isa_t host_isa, const MKLDNNNode& node, Precision exec_prc)
 : jit_emitter(host, host_isa, node, exec_prc) {}
 
 size_t jit_divide_emitter::get_inputs_num() { return 2; }
 
 void jit_divide_emitter::emit_impl(const std::vector<size_t> &in_vec_idxs, const std::vector<size_t> &out_vec_idxs,
-                                const std::vector<size_t> &pool_vec_idxs, const std::vector<size_t> &pool_gpr_idxs) {
+                                const std::vector<size_t> &pool_vec_idxs, const std::vector<size_t> &pool_gpr_idxs) const {
     if (host_isa_ == cpu::sse42) {
         emit_isa<cpu::sse42>(in_vec_idxs, out_vec_idxs);
     } else if (host_isa_ == cpu::avx2) {
@@ -243,13 +251,15 @@ size_t jit_divide_emitter::aux_vecs_count() const {
 }
 
 /// FLOOR_MOD ///
-jit_floor_mod_emitter::jit_floor_mod_emitter(jit_generator *host, cpu_isa_t host_isa, const MKLDNNNode* node, Precision exec_prc)
+jit_floor_mod_emitter::jit_floor_mod_emitter(jit_generator *host, cpu_isa_t host_isa, const std::shared_ptr<ngraph::Node>& node, Precision exec_prc)
+: jit_emitter(host, host_isa, node, exec_prc) {}
+jit_floor_mod_emitter::jit_floor_mod_emitter(jit_generator *host, cpu_isa_t host_isa, const MKLDNNNode& node, Precision exec_prc)
 : jit_emitter(host, host_isa, node, exec_prc) {}
 
 size_t jit_floor_mod_emitter::get_inputs_num() { return 2; }
 
 void jit_floor_mod_emitter::emit_impl(const std::vector<size_t> &in_vec_idxs, const std::vector<size_t> &out_vec_idxs,
-                                const std::vector<size_t> &pool_vec_idxs, const std::vector<size_t> &pool_gpr_idxs) {
+                                const std::vector<size_t> &pool_vec_idxs, const std::vector<size_t> &pool_gpr_idxs) const {
     if (host_isa_ == cpu::sse42) {
         emit_isa<cpu::sse42>(in_vec_idxs, out_vec_idxs);
     } else if (host_isa_ == cpu::avx2) {
@@ -292,13 +302,15 @@ size_t jit_floor_mod_emitter::aux_vecs_count() const {
 }
 
 /// MOD ///
-jit_mod_emitter::jit_mod_emitter(jit_generator *host, cpu_isa_t host_isa, const MKLDNNNode* node, Precision exec_prc)
+jit_mod_emitter::jit_mod_emitter(jit_generator *host, cpu_isa_t host_isa, const std::shared_ptr<ngraph::Node>& node, Precision exec_prc)
+: jit_emitter(host, host_isa, node, exec_prc) {}
+jit_mod_emitter::jit_mod_emitter(jit_generator *host, cpu_isa_t host_isa, const MKLDNNNode& node, Precision exec_prc)
 : jit_emitter(host, host_isa, node, exec_prc) {}
 
 size_t jit_mod_emitter::get_inputs_num() { return 2; }
 
 void jit_mod_emitter::emit_impl(const std::vector<size_t> &in_vec_idxs, const std::vector<size_t> &out_vec_idxs,
-                                const std::vector<size_t> &pool_vec_idxs, const std::vector<size_t> &pool_gpr_idxs) {
+                                const std::vector<size_t> &pool_vec_idxs, const std::vector<size_t> &pool_gpr_idxs) const {
     if (host_isa_ == cpu::sse42) {
         emit_isa<cpu::sse42>(in_vec_idxs, out_vec_idxs);
     } else if (host_isa_ == cpu::avx2) {
@@ -341,13 +353,15 @@ size_t jit_mod_emitter::aux_vecs_count() const {
 }
 
 /// MAXIMUM ///
-jit_maximum_emitter::jit_maximum_emitter(jit_generator *host, cpu_isa_t host_isa, const MKLDNNNode* node, Precision exec_prc)
+jit_maximum_emitter::jit_maximum_emitter(jit_generator *host, cpu_isa_t host_isa, const std::shared_ptr<ngraph::Node>& node, Precision exec_prc)
+: jit_emitter(host, host_isa, node, exec_prc) {}
+jit_maximum_emitter::jit_maximum_emitter(jit_generator *host, cpu_isa_t host_isa, const MKLDNNNode& node, Precision exec_prc)
 : jit_emitter(host, host_isa, node, exec_prc) {}
 
 size_t jit_maximum_emitter::get_inputs_num() { return 2; }
 
 void jit_maximum_emitter::emit_impl(const std::vector<size_t> &in_vec_idxs, const std::vector<size_t> &out_vec_idxs,
-                                const std::vector<size_t> &pool_vec_idxs, const std::vector<size_t> &pool_gpr_idxs) {
+                                const std::vector<size_t> &pool_vec_idxs, const std::vector<size_t> &pool_gpr_idxs) const {
     if (host_isa_ == cpu::sse42) {
         emit_isa<cpu::sse42>(in_vec_idxs, out_vec_idxs);
     } else if (host_isa_ == cpu::avx2) {
@@ -388,13 +402,15 @@ std::set<InferenceEngine::Precision> jit_maximum_emitter::get_supported_precisio
 }
 
 /// MINIMUM ///
-jit_minimum_emitter::jit_minimum_emitter(jit_generator *host, cpu_isa_t host_isa, const MKLDNNNode* node, Precision exec_prc)
+jit_minimum_emitter::jit_minimum_emitter(jit_generator *host, cpu_isa_t host_isa, const std::shared_ptr<ngraph::Node>& node, Precision exec_prc)
+: jit_emitter(host, host_isa, node, exec_prc) {}
+jit_minimum_emitter::jit_minimum_emitter(jit_generator *host, cpu_isa_t host_isa, const MKLDNNNode& node, Precision exec_prc)
 : jit_emitter(host, host_isa, node, exec_prc) {}
 
 size_t jit_minimum_emitter::get_inputs_num() { return 2; }
 
 void jit_minimum_emitter::emit_impl(const std::vector<size_t> &in_vec_idxs, const std::vector<size_t> &out_vec_idxs,
-                                const std::vector<size_t> &pool_vec_idxs, const std::vector<size_t> &pool_gpr_idxs) {
+                                const std::vector<size_t> &pool_vec_idxs, const std::vector<size_t> &pool_gpr_idxs) const {
     if (host_isa_ == cpu::sse42) {
         emit_isa<cpu::sse42>(in_vec_idxs, out_vec_idxs);
     } else if (host_isa_ == cpu::avx2) {
@@ -435,13 +451,16 @@ std::set<InferenceEngine::Precision> jit_minimum_emitter::get_supported_precisio
 }
 
 /// SQUARED_DIFFERENCE ///
-jit_squared_difference_emitter::jit_squared_difference_emitter(jit_generator *host, cpu_isa_t host_isa, const MKLDNNNode* node, Precision exec_prc)
+jit_squared_difference_emitter::jit_squared_difference_emitter(
+    jit_generator *host, cpu_isa_t host_isa, const std::shared_ptr<ngraph::Node>& node, Precision exec_prc)
+: jit_emitter(host, host_isa, node, exec_prc) {}
+jit_squared_difference_emitter::jit_squared_difference_emitter(jit_generator *host, cpu_isa_t host_isa, const MKLDNNNode& node, Precision exec_prc)
 : jit_emitter(host, host_isa, node, exec_prc) {}
 
 size_t jit_squared_difference_emitter::get_inputs_num() { return 2; }
 
 void jit_squared_difference_emitter::emit_impl(const std::vector<size_t> &in_vec_idxs, const std::vector<size_t> &out_vec_idxs,
-                                const std::vector<size_t> &pool_vec_idxs, const std::vector<size_t> &pool_gpr_idxs) {
+                                const std::vector<size_t> &pool_vec_idxs, const std::vector<size_t> &pool_gpr_idxs) const {
     if (host_isa_ == cpu::sse42) {
         emit_isa<cpu::sse42>(in_vec_idxs, out_vec_idxs);
     } else if (host_isa_ == cpu::avx2) {
@@ -473,13 +492,15 @@ void jit_squared_difference_emitter::emit_isa(const std::vector<size_t> &in_vec_
 
 
 /// POWER_DYNAMIC ///
-jit_power_dynamic_emitter::jit_power_dynamic_emitter(jit_generator *host, cpu_isa_t host_isa, const MKLDNNNode* node, Precision exec_prc)
+jit_power_dynamic_emitter::jit_power_dynamic_emitter(jit_generator *host, cpu_isa_t host_isa, const std::shared_ptr<ngraph::Node>& node, Precision exec_prc)
+: jit_emitter(host, host_isa, node, exec_prc) {}
+jit_power_dynamic_emitter::jit_power_dynamic_emitter(jit_generator *host, cpu_isa_t host_isa, const MKLDNNNode& node, Precision exec_prc)
 : jit_emitter(host, host_isa, node, exec_prc) {}
 
 size_t jit_power_dynamic_emitter::get_inputs_num() { return 2; }
 
 void jit_power_dynamic_emitter::emit_impl(const std::vector<size_t> &in_vec_idxs, const std::vector<size_t> &out_vec_idxs,
-                                const std::vector<size_t> &pool_vec_idxs, const std::vector<size_t> &pool_gpr_idxs) {
+                                const std::vector<size_t> &pool_vec_idxs, const std::vector<size_t> &pool_gpr_idxs) const {
     if (host_isa_ == cpu::sse42) {
         emit_isa<cpu::sse42>(in_vec_idxs, out_vec_idxs);
     } else if (host_isa_ == cpu::avx2) {
@@ -579,7 +600,11 @@ void jit_power_dynamic_emitter::emit_isa(const std::vector<size_t> &in_vec_idxs,
 
 
 /// EQUAL ///
-jit_equal_emitter::jit_equal_emitter(jit_generator *host, cpu_isa_t host_isa, const MKLDNNNode* node, Precision exec_prc)
+jit_equal_emitter::jit_equal_emitter(jit_generator *host, cpu_isa_t host_isa, const std::shared_ptr<ngraph::Node>& node, Precision exec_prc)
+: jit_emitter(host, host_isa, node, exec_prc) {
+    prepare_table();
+}
+jit_equal_emitter::jit_equal_emitter(jit_generator *host, cpu_isa_t host_isa, const MKLDNNNode& node, Precision exec_prc)
 : jit_emitter(host, host_isa, node, exec_prc) {
     prepare_table();
 }
@@ -587,7 +612,7 @@ jit_equal_emitter::jit_equal_emitter(jit_generator *host, cpu_isa_t host_isa, co
 size_t jit_equal_emitter::get_inputs_num() { return 2; }
 
 void jit_equal_emitter::emit_impl(const std::vector<size_t> &in_vec_idxs, const std::vector<size_t> &out_vec_idxs,
-                                const std::vector<size_t> &pool_vec_idxs, const std::vector<size_t> &pool_gpr_idxs) {
+                                const std::vector<size_t> &pool_vec_idxs, const std::vector<size_t> &pool_gpr_idxs) const {
     if (host_isa_ == cpu::sse42) {
         emit_isa<cpu::sse42>(in_vec_idxs, out_vec_idxs);
     } else if (host_isa_ == cpu::avx2) {
@@ -635,7 +660,11 @@ size_t jit_equal_emitter::aux_vecs_count() const {
 }
 
 /// NOT_EQUAL ///
-jit_not_equal_emitter::jit_not_equal_emitter(jit_generator *host, cpu_isa_t host_isa, const MKLDNNNode* node, Precision exec_prc)
+jit_not_equal_emitter::jit_not_equal_emitter(jit_generator *host, cpu_isa_t host_isa, const std::shared_ptr<ngraph::Node>& node, Precision exec_prc)
+: jit_emitter(host, host_isa, node, exec_prc) {
+    prepare_table();
+}
+jit_not_equal_emitter::jit_not_equal_emitter(jit_generator *host, cpu_isa_t host_isa, const MKLDNNNode& node, Precision exec_prc)
 : jit_emitter(host, host_isa, node, exec_prc) {
     prepare_table();
 }
@@ -643,7 +672,7 @@ jit_not_equal_emitter::jit_not_equal_emitter(jit_generator *host, cpu_isa_t host
 size_t jit_not_equal_emitter::get_inputs_num() { return 2; }
 
 void jit_not_equal_emitter::emit_impl(const std::vector<size_t> &in_vec_idxs, const std::vector<size_t> &out_vec_idxs,
-                                const std::vector<size_t> &pool_vec_idxs, const std::vector<size_t> &pool_gpr_idxs) {
+                                const std::vector<size_t> &pool_vec_idxs, const std::vector<size_t> &pool_gpr_idxs) const {
     if (host_isa_ == cpu::sse42) {
         emit_isa<cpu::sse42>(in_vec_idxs, out_vec_idxs);
     } else if (host_isa_ == cpu::avx2) {
@@ -691,7 +720,11 @@ size_t jit_not_equal_emitter::aux_vecs_count() const {
 }
 
 /// GREATER ///
-jit_greater_emitter::jit_greater_emitter(jit_generator *host, cpu_isa_t host_isa, const MKLDNNNode* node, Precision exec_prc)
+jit_greater_emitter::jit_greater_emitter(jit_generator *host, cpu_isa_t host_isa, const std::shared_ptr<ngraph::Node>& node, Precision exec_prc)
+: jit_emitter(host, host_isa, node, exec_prc) {
+    prepare_table();
+}
+jit_greater_emitter::jit_greater_emitter(jit_generator *host, cpu_isa_t host_isa, const MKLDNNNode& node, Precision exec_prc)
 : jit_emitter(host, host_isa, node, exec_prc) {
     prepare_table();
 }
@@ -699,7 +732,7 @@ jit_greater_emitter::jit_greater_emitter(jit_generator *host, cpu_isa_t host_isa
 size_t jit_greater_emitter::get_inputs_num() { return 2; }
 
 void jit_greater_emitter::emit_impl(const std::vector<size_t> &in_vec_idxs, const std::vector<size_t> &out_vec_idxs,
-                                const std::vector<size_t> &pool_vec_idxs, const std::vector<size_t> &pool_gpr_idxs) {
+                                const std::vector<size_t> &pool_vec_idxs, const std::vector<size_t> &pool_gpr_idxs) const {
     if (host_isa_ == cpu::sse42) {
         emit_isa<cpu::sse42>(in_vec_idxs, out_vec_idxs);
     } else if (host_isa_ == cpu::avx2) {
@@ -747,7 +780,11 @@ size_t jit_greater_emitter::aux_vecs_count() const {
 }
 
 /// GREATER_EQUAL ///
-jit_greater_equal_emitter::jit_greater_equal_emitter(jit_generator *host, cpu_isa_t host_isa, const MKLDNNNode* node, Precision exec_prc)
+jit_greater_equal_emitter::jit_greater_equal_emitter(jit_generator *host, cpu_isa_t host_isa, const std::shared_ptr<ngraph::Node>& node, Precision exec_prc)
+: jit_emitter(host, host_isa, node, exec_prc) {
+    prepare_table();
+}
+jit_greater_equal_emitter::jit_greater_equal_emitter(jit_generator *host, cpu_isa_t host_isa, const MKLDNNNode& node, Precision exec_prc)
 : jit_emitter(host, host_isa, node, exec_prc) {
     prepare_table();
 }
@@ -755,7 +792,7 @@ jit_greater_equal_emitter::jit_greater_equal_emitter(jit_generator *host, cpu_is
 size_t jit_greater_equal_emitter::get_inputs_num() { return 2; }
 
 void jit_greater_equal_emitter::emit_impl(const std::vector<size_t> &in_vec_idxs, const std::vector<size_t> &out_vec_idxs,
-                                const std::vector<size_t> &pool_vec_idxs, const std::vector<size_t> &pool_gpr_idxs) {
+                                const std::vector<size_t> &pool_vec_idxs, const std::vector<size_t> &pool_gpr_idxs) const {
     if (host_isa_ == cpu::sse42) {
         emit_isa<cpu::sse42>(in_vec_idxs, out_vec_idxs);
     } else if (host_isa_ == cpu::avx2) {
@@ -803,7 +840,11 @@ size_t jit_greater_equal_emitter::aux_vecs_count() const {
 }
 
 /// LESS ///
-jit_less_emitter::jit_less_emitter(jit_generator *host, cpu_isa_t host_isa, const MKLDNNNode* node, Precision exec_prc)
+jit_less_emitter::jit_less_emitter(jit_generator *host, cpu_isa_t host_isa, const std::shared_ptr<ngraph::Node>& node, Precision exec_prc)
+: jit_emitter(host, host_isa, node, exec_prc) {
+    prepare_table();
+}
+jit_less_emitter::jit_less_emitter(jit_generator *host, cpu_isa_t host_isa, const MKLDNNNode& node, Precision exec_prc)
 : jit_emitter(host, host_isa, node, exec_prc) {
     prepare_table();
 }
@@ -811,7 +852,7 @@ jit_less_emitter::jit_less_emitter(jit_generator *host, cpu_isa_t host_isa, cons
 size_t jit_less_emitter::get_inputs_num() { return 2; }
 
 void jit_less_emitter::emit_impl(const std::vector<size_t> &in_vec_idxs, const std::vector<size_t> &out_vec_idxs,
-                                const std::vector<size_t> &pool_vec_idxs, const std::vector<size_t> &pool_gpr_idxs) {
+                                const std::vector<size_t> &pool_vec_idxs, const std::vector<size_t> &pool_gpr_idxs) const {
     if (host_isa_ == cpu::sse42) {
         emit_isa<cpu::sse42>(in_vec_idxs, out_vec_idxs);
     } else if (host_isa_ == cpu::avx2) {
@@ -859,7 +900,11 @@ size_t jit_less_emitter::aux_vecs_count() const {
 }
 
 /// LESS_EQUAL ///
-jit_less_equal_emitter::jit_less_equal_emitter(jit_generator *host, cpu_isa_t host_isa, const MKLDNNNode* node, Precision exec_prc)
+jit_less_equal_emitter::jit_less_equal_emitter(jit_generator *host, cpu_isa_t host_isa, const std::shared_ptr<ngraph::Node>& node, Precision exec_prc)
+: jit_emitter(host, host_isa, node, exec_prc) {
+    prepare_table();
+}
+jit_less_equal_emitter::jit_less_equal_emitter(jit_generator *host, cpu_isa_t host_isa, const MKLDNNNode& node, Precision exec_prc)
 : jit_emitter(host, host_isa, node, exec_prc) {
     prepare_table();
 }
@@ -867,7 +912,7 @@ jit_less_equal_emitter::jit_less_equal_emitter(jit_generator *host, cpu_isa_t ho
 size_t jit_less_equal_emitter::get_inputs_num() { return 2; }
 
 void jit_less_equal_emitter::emit_impl(const std::vector<size_t> &in_vec_idxs, const std::vector<size_t> &out_vec_idxs,
-                                const std::vector<size_t> &pool_vec_idxs, const std::vector<size_t> &pool_gpr_idxs) {
+                                const std::vector<size_t> &pool_vec_idxs, const std::vector<size_t> &pool_gpr_idxs) const {
     if (host_isa_ == cpu::sse42) {
         emit_isa<cpu::sse42>(in_vec_idxs, out_vec_idxs);
     } else if (host_isa_ == cpu::avx2) {
@@ -916,7 +961,11 @@ size_t jit_less_equal_emitter::aux_vecs_count() const {
 }
 
 /// LOGICAL_AND ///
-jit_logical_and_emitter::jit_logical_and_emitter(jit_generator *host, cpu_isa_t host_isa, const MKLDNNNode* node, Precision exec_prc)
+jit_logical_and_emitter::jit_logical_and_emitter(jit_generator *host, cpu_isa_t host_isa, const std::shared_ptr<ngraph::Node>& node, Precision exec_prc)
+: jit_emitter(host, host_isa, node, exec_prc) {
+    prepare_table();
+}
+jit_logical_and_emitter::jit_logical_and_emitter(jit_generator *host, cpu_isa_t host_isa, const MKLDNNNode& node, Precision exec_prc)
 : jit_emitter(host, host_isa, node, exec_prc) {
     prepare_table();
 }
@@ -924,7 +973,7 @@ jit_logical_and_emitter::jit_logical_and_emitter(jit_generator *host, cpu_isa_t 
 size_t jit_logical_and_emitter::get_inputs_num() { return 2; }
 
 void jit_logical_and_emitter::emit_impl(const std::vector<size_t> &in_vec_idxs, const std::vector<size_t> &out_vec_idxs,
-                                const std::vector<size_t> &pool_vec_idxs, const std::vector<size_t> &pool_gpr_idxs) {
+                                const std::vector<size_t> &pool_vec_idxs, const std::vector<size_t> &pool_gpr_idxs) const {
     if (host_isa_ == cpu::sse42) {
         emit_isa<cpu::sse42>(in_vec_idxs, out_vec_idxs);
     } else if (host_isa_ == cpu::avx2) {
@@ -993,7 +1042,11 @@ size_t jit_logical_and_emitter::aux_vecs_count() const {
 
 
 /// LOGICAL_OR ///
-jit_logical_or_emitter::jit_logical_or_emitter(jit_generator *host, cpu_isa_t host_isa, const MKLDNNNode* node, Precision exec_prc)
+jit_logical_or_emitter::jit_logical_or_emitter(jit_generator *host, cpu_isa_t host_isa, const std::shared_ptr<ngraph::Node>& node, Precision exec_prc)
+: jit_emitter(host, host_isa, node, exec_prc) {
+    prepare_table();
+}
+jit_logical_or_emitter::jit_logical_or_emitter(jit_generator *host, cpu_isa_t host_isa, const MKLDNNNode& node, Precision exec_prc)
 : jit_emitter(host, host_isa, node, exec_prc) {
     prepare_table();
 }
@@ -1001,7 +1054,7 @@ jit_logical_or_emitter::jit_logical_or_emitter(jit_generator *host, cpu_isa_t ho
 size_t jit_logical_or_emitter::get_inputs_num() { return 2; }
 
 void jit_logical_or_emitter::emit_impl(const std::vector<size_t> &in_vec_idxs, const std::vector<size_t> &out_vec_idxs,
-                                const std::vector<size_t> &pool_vec_idxs, const std::vector<size_t> &pool_gpr_idxs) {
+                                const std::vector<size_t> &pool_vec_idxs, const std::vector<size_t> &pool_gpr_idxs) const {
     if (host_isa_ == cpu::sse42) {
         emit_isa<cpu::sse42>(in_vec_idxs, out_vec_idxs);
     } else if (host_isa_ == cpu::avx2) {
@@ -1069,7 +1122,11 @@ size_t jit_logical_or_emitter::aux_vecs_count() const {
 }
 
 /// LOGICAL_XOR ///
-jit_logical_xor_emitter::jit_logical_xor_emitter(jit_generator *host, cpu_isa_t host_isa, const MKLDNNNode* node, Precision exec_prc)
+jit_logical_xor_emitter::jit_logical_xor_emitter(jit_generator *host, cpu_isa_t host_isa, const std::shared_ptr<ngraph::Node>& node, Precision exec_prc)
+: jit_emitter(host, host_isa, node, exec_prc) {
+    prepare_table();
+}
+jit_logical_xor_emitter::jit_logical_xor_emitter(jit_generator *host, cpu_isa_t host_isa, const MKLDNNNode& node, Precision exec_prc)
 : jit_emitter(host, host_isa, node, exec_prc) {
     prepare_table();
 }
@@ -1077,7 +1134,7 @@ jit_logical_xor_emitter::jit_logical_xor_emitter(jit_generator *host, cpu_isa_t 
 size_t jit_logical_xor_emitter::get_inputs_num() { return 2; }
 
 void jit_logical_xor_emitter::emit_impl(const std::vector<size_t> &in_vec_idxs, const std::vector<size_t> &out_vec_idxs,
-                                const std::vector<size_t> &pool_vec_idxs, const std::vector<size_t> &pool_gpr_idxs) {
+                                const std::vector<size_t> &pool_vec_idxs, const std::vector<size_t> &pool_gpr_idxs) const {
     if (host_isa_ == cpu::sse42) {
         emit_isa<cpu::sse42>(in_vec_idxs, out_vec_idxs);
     } else if (host_isa_ == cpu::avx2) {
@@ -1145,7 +1202,11 @@ size_t jit_logical_xor_emitter::aux_vecs_count() const {
 }
 
 /// LOGICAL_NOT ///
-jit_logical_not_emitter::jit_logical_not_emitter(jit_generator *host, cpu_isa_t host_isa, const MKLDNNNode* node, Precision exec_prc)
+jit_logical_not_emitter::jit_logical_not_emitter(jit_generator *host, cpu_isa_t host_isa, const std::shared_ptr<ngraph::Node>& node, Precision exec_prc)
+: jit_emitter(host, host_isa, node, exec_prc) {
+    prepare_table();
+}
+jit_logical_not_emitter::jit_logical_not_emitter(jit_generator *host, cpu_isa_t host_isa, const MKLDNNNode& node, Precision exec_prc)
 : jit_emitter(host, host_isa, node, exec_prc) {
     prepare_table();
 }
@@ -1153,7 +1214,7 @@ jit_logical_not_emitter::jit_logical_not_emitter(jit_generator *host, cpu_isa_t 
 size_t jit_logical_not_emitter::get_inputs_num() { return 1; }
 
 void jit_logical_not_emitter::emit_impl(const std::vector<size_t> &in_vec_idxs, const std::vector<size_t> &out_vec_idxs,
-                                const std::vector<size_t> &pool_vec_idxs, const std::vector<size_t> &pool_gpr_idxs) {
+                                const std::vector<size_t> &pool_vec_idxs, const std::vector<size_t> &pool_gpr_idxs) const {
     if (host_isa_ == cpu::sse42) {
         emit_isa<cpu::sse42>(in_vec_idxs, out_vec_idxs);
     } else if (host_isa_ == cpu::avx2) {
@@ -1200,15 +1261,50 @@ size_t jit_logical_not_emitter::aux_vecs_count() const {
 }
 
 /// POWER_STATIC ///
-jit_power_static_emitter::jit_power_static_emitter(jit_generator *host, cpu_isa_t host_isa, const MKLDNNNode* node, Precision exec_prc)
+jit_power_static_emitter::jit_power_static_emitter(jit_generator *host, cpu_isa_t host_isa, const std::shared_ptr<ngraph::Node>& node, Precision exec_prc)
 : jit_emitter(host, host_isa, node, exec_prc) {
+    remark(10) << "PowerEmitter: " << node->get_friendly_name() << " " << node->get_type_info().name << std::endl;
+    auto parent = node->input(1).get_source_output().get_node_shared_ptr();
+    if (!std::dynamic_pointer_cast<ngraph::op::Scalar>(parent)) {
+        throw ngraph::ngraph_error("unsupported non constant power");
+    }
+
+    if (!(node->input(1).get_shape() == ngraph::Shape() || ngraph::shape_size(node->input(1).get_shape()) == 1)) {
+        throw ngraph::ngraph_error("unsupported non scalar power");
+    }
+    power = ngraph::as_type_ptr<ngraph::op::Scalar>(parent)->get_data_ptr<float>()[0];
+    std::cout << "order = " << power << std::endl;
+    scale = 1.f;
+    shift = 0.f;
+    push_arg_entry_of("power", float2int(power), true);
+    push_arg_entry_of("scale", 0x3f800000, true);
+    push_arg_entry_of("shift", 0x00000000, true);
+    push_arg_entry_of("one",   0x3f800000, true);
+
+    prepare_table();
+}
+jit_power_static_emitter::jit_power_static_emitter(jit_generator *host, cpu_isa_t host_isa, const MKLDNNNode& node, Precision exec_prc)
+: jit_emitter(host, host_isa, node, exec_prc) {
+    auto *powerLayer = dynamic_cast<InferenceEngine::PowerLayer *>(node.getCnnLayer().get());
+    if (powerLayer == nullptr)
+        THROW_IE_EXCEPTION << "Cannot convert power layer.";
+
+    power = powerLayer->power;
+    scale = powerLayer->scale;
+    shift = powerLayer->offset;
+
+    push_arg_entry_of("power", float2int(power), true);
+    push_arg_entry_of("scale", float2int(scale), true);
+    push_arg_entry_of("shift", float2int(shift), true);
+    push_arg_entry_of("one",   float2int(1.f), true);
+
     prepare_table();
 }
 
 size_t jit_power_static_emitter::get_inputs_num() { return 1; }
 
 void jit_power_static_emitter::emit_impl(const std::vector<size_t> &in_vec_idxs, const std::vector<size_t> &out_vec_idxs,
-                                const std::vector<size_t> &pool_vec_idxs, const std::vector<size_t> &pool_gpr_idxs) {
+                                const std::vector<size_t> &pool_vec_idxs, const std::vector<size_t> &pool_gpr_idxs) const {
     if (host_isa_ == cpu::sse42) {
         emit_isa<cpu::sse42>(in_vec_idxs, out_vec_idxs);
     } else if (host_isa_ == cpu::avx2) {
@@ -1226,14 +1322,6 @@ void jit_power_static_emitter::emit_isa(const std::vector<size_t> &in_vec_idxs, 
     Vmm vmm_src0 = Vmm(in_vec_idxs[0]);
     Vmm vmm_dst = Vmm(out_vec_idxs[0]);
     Vmm vmm_aux0 = Vmm(aux_vec_idxs[0]);
-
-    auto *powerLayer = dynamic_cast<InferenceEngine::PowerLayer *>(n->getCnnLayer().get());
-    if (powerLayer == nullptr)
-        THROW_IE_EXCEPTION << "Cannot convert power layer.";
-
-    float power = powerLayer->power;
-    float scale = powerLayer->scale;
-    float shift = powerLayer->offset;
 
     Xmm xmm0 = Xmm(0), xmm1 = Xmm(1);
 
@@ -1369,18 +1457,7 @@ void jit_power_static_emitter::emit_isa(const std::vector<size_t> &in_vec_idxs, 
 }
 
 void jit_power_static_emitter::register_table_entries() {
-    auto *powerLayer = dynamic_cast<InferenceEngine::PowerLayer *>(n->getCnnLayer().get());
-    if (powerLayer == nullptr)
-        THROW_IE_EXCEPTION << "Cannot convert power layer.";
-
-    float power_ = powerLayer->power;
-    float scale_ = powerLayer->scale;
-    float shift_ = powerLayer->offset;
-
-    push_arg_entry_of("power", float2int(power_), true);
-    push_arg_entry_of("scale", float2int(scale_), true);
-    push_arg_entry_of("shift", float2int(shift_), true);
-    push_arg_entry_of("one",   float2int(1.f), true);
+    // FIXME: nothing is here. What can be taken from node should be taken in the constructor
 }
 
 size_t jit_power_static_emitter::aux_vecs_count() const {
@@ -1388,15 +1465,18 @@ size_t jit_power_static_emitter::aux_vecs_count() const {
 }
 
 /// PRELU ///
-jit_prelu_emitter::jit_prelu_emitter(jit_generator *host, cpu_isa_t host_isa, const MKLDNNNode* node, Precision exec_prc)
+jit_prelu_emitter::jit_prelu_emitter(jit_generator *host, cpu_isa_t host_isa, const std::shared_ptr<ngraph::Node>& node, Precision exec_prc)
 : jit_emitter(host, host_isa, node, exec_prc) {
     prepare_table();
 }
-
+jit_prelu_emitter::jit_prelu_emitter(jit_generator *host, cpu_isa_t host_isa, const MKLDNNNode& node, Precision exec_prc)
+: jit_emitter(host, host_isa, node, exec_prc) {
+    prepare_table();
+}
 size_t jit_prelu_emitter::get_inputs_num() { return 2; }
 
 void jit_prelu_emitter::emit_impl(const std::vector<size_t> &in_vec_idxs, const std::vector<size_t> &out_vec_idxs,
-                                const std::vector<size_t> &pool_vec_idxs, const std::vector<size_t> &pool_gpr_idxs) {
+                                const std::vector<size_t> &pool_vec_idxs, const std::vector<size_t> &pool_gpr_idxs) const {
     if (host_isa_ == cpu::sse42) {
         emit_isa<cpu::sse42>(in_vec_idxs, out_vec_idxs);
     } else if (host_isa_ == cpu::avx2) {

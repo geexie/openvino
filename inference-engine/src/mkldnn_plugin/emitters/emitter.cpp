@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-#include "emitter.h"
+#include "emitter.hpp"
 #include <vector>
 
 using namespace mkldnn::impl::cpu;
@@ -62,9 +62,13 @@ std::set<InferenceEngine::Precision> jit_emitter::get_supported_precisions() {
     return {InferenceEngine::Precision::FP32};
 }
 
-void jit_emitter::emitter_preamble(const std::vector<size_t> &in_vec_idxs, const std::vector<size_t> &pool_vec_idxs,
-                                   const std::vector<size_t> &pool_gpr_idxs) {
+void jit_emitter::emitter_preamble(const std::vector<size_t> &in_vec_idxs, const std::vector<size_t> &out_vec_idxs, const std::vector<size_t> &pool_vec_idxs,
+                                   const std::vector<size_t> &pool_gpr_idxs) const {
     using namespace Xbyak::util;
+
+    for (auto idx : in_vec_idxs) {
+        std::cout << "in idx = " << idx << std::endl;
+    }
 
     for (auto idx : pool_vec_idxs)
         aux_vec_idxs.push_back(idx);
@@ -93,6 +97,7 @@ void jit_emitter::emitter_preamble(const std::vector<size_t> &in_vec_idxs, const
         if (aux_vec_idxs.size() >= aux_vecs_count()) break;
 
         if (std::find(in_vec_idxs.begin(), in_vec_idxs.end(), idx) != in_vec_idxs.end()) continue;
+        if (std::find(out_vec_idxs.begin(), out_vec_idxs.end(), idx) != out_vec_idxs.end()) continue;
         if (std::find(aux_vec_idxs.begin(), aux_vec_idxs.end(), idx) != aux_vec_idxs.end()) continue;
         if (std::find(preserved_vec_idxs.begin(), preserved_vec_idxs.end(), idx) != preserved_vec_idxs.end()) continue;
 
@@ -101,9 +106,17 @@ void jit_emitter::emitter_preamble(const std::vector<size_t> &in_vec_idxs, const
     }
     assert(aux_vec_idxs.size() >= aux_vecs_count());
 
+    for (auto idx : aux_vec_idxs)
+        std::cout << "aux idx = " << idx << std::endl;
+
+    for (auto idx : preserved_vec_idxs)
+        std::cout << "prez idx = " << idx << std::endl;
+
     // Same logic but to allocate gprs
     for (auto idx : pool_gpr_idxs)
         aux_gpr_idxs.push_back(idx);
+
+    // aux_gpr_idxs.push_back(Xbyak::util::rax.getIdx());
 
     for (size_t gpr_idx = 0; gpr_idx <= Operand::R15; ++gpr_idx) {
         size_t _idx = Operand::R15 - gpr_idx; // we allocate from the end
@@ -119,7 +132,7 @@ void jit_emitter::emitter_preamble(const std::vector<size_t> &in_vec_idxs, const
     assert(aux_gpr_idxs.size() == aux_gprs_count());
 
     if (!entry_map_.empty()) {
-        p_table = Reg64(aux_gpr_idxs[0]);
+        p_table = Xbyak::util::rax;//Reg64(aux_gpr_idxs[0]);
         aux_gpr_idxs.erase(aux_gpr_idxs.begin());
     }
 
@@ -130,6 +143,7 @@ void jit_emitter::emitter_preamble(const std::vector<size_t> &in_vec_idxs, const
         h->sub(h->rsp, preserved_vec_idxs.size() * get_vec_length());
 
     for (size_t i = 0; i < preserved_vec_idxs.size(); ++i) {
+        std::cout << "preserving " << preserved_vec_idxs[i] << std::endl;
         push_vec(h->ptr[h->rsp + i * get_vec_length()], preserved_vec_idxs[i]);
     }
 
@@ -138,7 +152,7 @@ void jit_emitter::emitter_preamble(const std::vector<size_t> &in_vec_idxs, const
 }
 
 
-void jit_emitter::emitter_postamble() {
+void jit_emitter::emitter_postamble() const {
     using namespace Xbyak::util;
 
     for (size_t i = 0; i < preserved_vec_idxs.size(); ++i)
@@ -159,7 +173,7 @@ void jit_emitter::emitter_postamble() {
 
 void jit_emitter::emit_table() {
     h->align(64);
-    h->L(l_table);
+    h->L(*l_table.get());
 
     // Assumption: entries can be inserted with dd, so they should be 4 bytes.
     assert(sizeof(table_entry_val_t) == 4);
@@ -184,13 +198,22 @@ void jit_emitter::prepare_table() {
     for (auto it = entry_map_.begin(); it != entry_map_.end(); it++) {
         auto &te = (*it).second;
         te.off = off;
+        std::cout << te.off << std::endl;
         off += te.bcast ? get_vec_length() : sizeof(table_entry_val_t);
     }
 }
 
 void jit_emitter::emit(const std::vector<size_t> &in_vec_idxs, const std::vector<size_t> &out_vec_idxs,
-                       const std::vector<size_t> &pool_vec_idxs, const std::vector<size_t> &pool_gpr_idxs) {
-    emitter_preamble(in_vec_idxs, pool_vec_idxs, pool_gpr_idxs);
+                       const std::vector<size_t> &pool_vec_idxs, const std::vector<size_t> &pool_gpr_idxs) const {
+    for (auto idx : in_vec_idxs) {
+        std::cout << "in idx = " << idx << std::endl;
+    }
+
+        for (auto idx : out_vec_idxs) {
+        std::cout << "out idx = " << idx << std::endl;
+    }
+
+    emitter_preamble(in_vec_idxs, out_vec_idxs, pool_vec_idxs, pool_gpr_idxs);
 
     emit_impl(in_vec_idxs, out_vec_idxs, pool_vec_idxs, pool_gpr_idxs);
 

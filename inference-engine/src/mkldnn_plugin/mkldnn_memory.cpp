@@ -12,6 +12,7 @@
 #include <mkldnn_types.h>
 #include "mkldnn_memory.h"
 #include "mkldnn_node.h"
+#include <mkldnn_debug.h>
 #include "mkldnn_extension_utils.h"
 #include "nodes/common/cpu_memcpy.h"
 
@@ -514,14 +515,31 @@ MKLDNNMemoryDesc::operator mkldnn::memory::desc() const {
     return desc;
 }
 
+void print_dims(std::string name, const mkldnn::memory::dims& dims) {
+    std::cout << name << ": {";
+    if (!dims.empty())
+        std::cout << dims[0];
+    for (size_t i = 1; i < dims.size(); ++i)
+        std::cout << ", " << dims[i];
+    std::cout << "}" << std::endl;
+}
+
 MKLDNNMemoryDesc::MKLDNNMemoryDesc(mkldnn::memory::dims dims, mkldnn::memory::data_type dataType,
                                    mkldnn::memory::format format): desc(dims, dataType, mkldnn::memory::any) {
+    // std::cout << "MKLDNNMemoryDesc" << std::endl;
     if (format != memory::blocked) {
         if (format == memory::x && dims.size() == 0) {
             desc = mkldnn::memory::desc(mkldnn::memory::dims(1, 1), dataType, format);
             MKLDNNMemory::CreateBlockingDesc(desc);
         } else {
+            // std::cout << "before desc = mkldnn::memory::desc(dims, dataType, format);" << std::endl;
             desc = mkldnn::memory::desc(dims, dataType, format);
+            // std::cout << "efter desc = mkldnn::memory::desc(dims, dataType, format);"
+            //     << dims.size()
+            //     << " " << mkldnn_dt2str(memory::convert_to_c(dataType))
+            //     << " " << mkldnn_fmt2str(memory::convert_to_c(format))
+            //     << " " << mkldnn_dt2str((desc.data.data_type)) << " ";
+            // print_dims("dims", dims);
         }
         return;
     }
@@ -553,7 +571,7 @@ MKLDNNMemoryDesc::operator InferenceEngine::TensorDesc() const {
             precision = Precision::BF16;
             break;
         default:
-            THROW_IE_EXCEPTION << "Cannot cast to TensorDesc. Unsupported precision!";
+            THROW_IE_EXCEPTION << "Cannot cast to TensorDesc. Unsupported precision! " << desc.data.data_type;
     }
     Layout layout;
     SizeVector order;

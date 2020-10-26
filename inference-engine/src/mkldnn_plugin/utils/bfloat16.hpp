@@ -7,7 +7,7 @@
 #include <cmath>
 #include <limits>
 #include "utils.hpp"
-#include "nodes/common/emitter.h"
+#include "emitters/emitter.hpp"
 
 /**
  * The bfloat16_t class can be used as an arithmetic type. All arithmetic operations goes through conversion to the float data type.
@@ -77,8 +77,13 @@ private:
 
 class jit_emu_vcvtneps2bf16 : public jit_emitter {
 public:
-    jit_emu_vcvtneps2bf16(mkldnn::impl::cpu::jit_generator* host, mkldnn::impl::cpu::cpu_isa_t host_isa, const MKLDNNNode* node,
+    jit_emu_vcvtneps2bf16(mkldnn::impl::cpu::jit_generator* host, mkldnn::impl::cpu::cpu_isa_t host_isa, const MKLDNNNode& node,
         InferenceEngine::Precision exec_prc = InferenceEngine::Precision::BF16) : jit_emitter(host, host_isa, node, exec_prc) {
+        prepare_table();
+    };
+
+    jit_emu_vcvtneps2bf16(mkldnn::impl::cpu::jit_generator* host, mkldnn::impl::cpu::cpu_isa_t host_isa,
+        InferenceEngine::Precision exec_prc = InferenceEngine::Precision::BF16) : jit_emitter(host, host_isa, exec_prc) {
         prepare_table();
     };
 

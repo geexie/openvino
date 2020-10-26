@@ -51,6 +51,8 @@
 #include "mkldnn_debug.h"
 #include "utils/rt_info/memory_formats_attribute.hpp"
 
+#include "ngraph_ops/subgraph.hpp"
+
 using namespace mkldnn;
 using namespace MKLDNNPlugin;
 using namespace openvino;
@@ -141,6 +143,7 @@ static const InferenceEngine::details::caseless_unordered_map<std::string, Type>
         { "ReduceProd", ReduceProd},
         { "ReduceSum", ReduceSum},
         { "ReduceSumSquare", ReduceSumSquare},
+        { "Subgraph", Subgraph},
 };
 
 Type TypeFromName(const std::string type) {
