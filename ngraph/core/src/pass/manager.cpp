@@ -119,6 +119,7 @@ void pass::Manager::run_passes(shared_ptr<Function> func)
         NGRAPH_SUPPRESS_DEPRECATED_START
         if (auto matcher_pass = dynamic_pointer_cast<MatcherPass>(pass))
         {
+            // std::cout << pass->get_name() << " is statred!" << std::endl;
             // This checks is to skip the graph transformation when the graph pass relies on
             // static shape but the function state is dynamic.
             if (matcher_pass->get_property(PassProperty::REQUIRE_STATIC_SHAPE) &&
@@ -131,9 +132,11 @@ void pass::Manager::run_passes(shared_ptr<Function> func)
             // GraphRewrite is a temporary container for MatcherPass to make execution
             // on on entire ngraph::Function
             function_changed = GraphRewrite(matcher_pass).run_on_function(func);
+            // std::cout << pass->get_name() << " is done!" << std::endl;
         }
         else if (auto function_pass = dynamic_pointer_cast<FunctionPass>(pass))
         {
+            // std::cout << pass->get_name() << " is statred!" << std::endl;
             // This checks is to skip the graph transformation when the graph pass relies on
             // static shape but the function state is dynamic.
             if (function_pass->get_property(PassProperty::REQUIRE_STATIC_SHAPE) &&
@@ -156,6 +159,7 @@ void pass::Manager::run_passes(shared_ptr<Function> func)
             {
                 function_changed = function_pass->run_on_function(func);
             }
+            // std::cout << pass->get_name() << " is done!" << std::endl;
         }
         else if (auto node_pass = dynamic_pointer_cast<NodePass>(pass))
         {

@@ -53,11 +53,11 @@
 // #define BLOB_DUMP_PATH "/Users/mkolpako/bench-08-01-2020/large/regression/snippets"
 // #define BLOB_DUMP_PATH "/Users/mkolpako/bench-08-01-2020/small/regression/snippets"
 
-// #define BLOB_DUMP_PATH "/Users/mkolpako/bench-08-01-2020/"
+#define BLOB_DUMP_PATH "/Users/mkolpako/bench-08-01-2020/"
 //  #define PRINT_GRAPH_INFO
 //  #define DUMP_AS_TEXT
  //#define DUMP_INTERNAL_BLOBS
-// #define CHECK_REFERENCE
+#define CHECK_REFERENCE
 
 #ifdef BLOB_DUMP_PATH
 #   define DUMP_DIR        BLOB_DUMP_PATH
@@ -1349,7 +1349,7 @@ void MKLDNNGraph::do_before(const std::string &dir, const MKLDNNNodePtr &node) {
             }
 
             for (int k = 0; k < prEdge->getBlob()->size(); k++) {
-                // std::cout << i << ": " << k << ": " << ref[k] << " " << act[k] << " " << std::abs(ref[k]-act[k]) << std::endl;
+                std::cout << i << ": " << k << ": " << ref[k] << " " << act[k] << " " << std::abs(ref[k]-act[k]) << std::endl;
                 if (std::abs(ref[k]-act[k]) > accuracy_threshold || std::isnan(ref[k]) != std::isnan(act[k])) {
                     std::cout << i << ": " << k << ": " << ref[k] << " " << act[k] << " " << std::abs(ref[k]-act[k]) << std::endl;
                     THROW_IE_EXCEPTION << ref[k] << " " << act[k] << " " << std::abs(ref[k]-act[k]);

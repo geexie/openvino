@@ -168,6 +168,9 @@ void CPUGenerator::generate_tile(std::shared_ptr<ngraph::Function>& f) const {
     auto params = f->get_parameters();
     auto results = f->get_results();
 
+    auto nparams = f->get_results().size() + f->get_parameters().size();
+    Xbyak::Reg64 amount = Xbyak::Reg64(reg64_tmp_start+nparams);
+
     if (params.size()+results.size() > 7) {
         throw ngraph_error(std::string("snippet signature should not exceed 7 arguments. got") + std::to_string(params.size()+results.size()));
     }
@@ -185,6 +188,9 @@ void CPUGenerator::generate_tile(std::shared_ptr<ngraph::Function>& f) const {
         for (auto i = 0; i < results.size(); i++) {
             h->mov(regs[params.size()+i], h->ptr[param + (params.size()+i)*sizeof(size_t)]);
         }
+
+
+        h->mov(amount, h->ptr[param + sizeof(size_t)*nparams]);
     }
 
 #if 1
@@ -196,13 +202,6 @@ void CPUGenerator::generate_tile(std::shared_ptr<ngraph::Function>& f) const {
 
     std::array<std::vector<std::shared_ptr<Emitter>>, 2> lowered_ops = {lowered, scalar_lowered};
     std::array<std::vector<RegInfo>, 2> reginfos   = {reginfo, scalar_reginfo};
-
-    // obtain work amount
-    Xbyak::Reg64 param = mkldnn::impl::cpu::abi_param1; // RCX
-    int reg_start = h->r8.getIdx();
-    auto nparams = f->get_results().size() + f->get_parameters().size();
-    Xbyak::Reg64 amount = Xbyak::Reg64(reg_start+nparams);
-    h->mov(amount, h->ptr[param + sizeof(size_t)*nparams]);
 
     // generate both vector and scalar loops
     for (int loopId = 0; loopId < nloads.size(); loopId++) {

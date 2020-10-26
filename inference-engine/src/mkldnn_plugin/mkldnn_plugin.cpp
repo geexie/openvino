@@ -193,6 +193,7 @@ static void Transformation(ICNNNetwork::Ptr& clonedNetwork, const Config& conf) 
             });
 
     // List of enabled/disabled transformations
+#if !defined(TOKENIZE_SNIPPETS)
     pass_config->disable<ngraph::pass::ConvertGELU>();
     pass_config->disable<ngraph::pass::HSwishDecomposition>();
     pass_config->disable<ngraph::pass::ReduceL1Decomposition>();
@@ -201,7 +202,7 @@ static void Transformation(ICNNNetwork::Ptr& clonedNetwork, const Config& conf) 
     pass_config->disable<ngraph::pass::HSigmoidDecomposition>();
     pass_config->disable<ngraph::pass::ConvertMod>();
     pass_config->disable<ngraph::pass::LogSoftmaxDecomposition>();
-
+#endif
     pass_config->enable<ngraph::pass::ConvertPadToGroupConvolution>();
 
     manager.run_passes(nGraphFunc);

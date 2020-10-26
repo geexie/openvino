@@ -33,6 +33,7 @@
 #include "ngraph/op/util/fused_op.hpp"
 #include "ngraph/op/util/unary_elementwise_arithmetic.hpp"
 #include "ngraph/op/xor.hpp"
+#include "ngraph/op/squared_difference.hpp"
 #include "ngraph/type.hpp"
 
 NGRAPH_SUPPRESS_DEPRECATED_START
@@ -60,6 +61,7 @@ bool ngraph::op::is_binary_elementwise_logical(const ngraph::Node* node)
 bool ngraph::op::supports_auto_broadcast(const ngraph::Node* node)
 {
     return dynamic_cast<const ngraph::op::v1::Select*>(node) != nullptr ||
+           dynamic_cast<const ngraph::op::v0::SquaredDifference*>(node) != nullptr ||
            dynamic_cast<const ngraph::op::util::BinaryElementwiseComparison*>(node) != nullptr ||
            dynamic_cast<const ngraph::op::util::BinaryElementwiseLogical*>(node) != nullptr ||
            dynamic_cast<const ngraph::op::util::BinaryElementwiseArithmetic*>(node) != nullptr;
