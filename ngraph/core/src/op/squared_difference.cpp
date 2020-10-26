@@ -21,6 +21,9 @@
 #include "ngraph/op/subtract.hpp"
 #include "ngraph/op/util/fused_op.hpp"
 
+#include "ngraph/runtime/reference/sqdiff.hpp"
+#include "ngraph/runtime/host_tensor.hpp"
+
 using namespace std;
 using namespace ngraph;
 
@@ -51,6 +54,16 @@ OutputVector op::SquaredDifference::decompose_op() const
     const auto difference = make_shared<op::Subtract>(x1, x2, m_autobroadcast);
 
     return {difference * difference};
+}
+
+bool op::SquaredDifference::evaluate(const HostTensorVector& ot, const HostTensorVector& it) const
+{
+    if (input(0).get_element_type() == element::Type(element::f32)) {
+        runtime::reference::squared_difference<float>(it[0]->get_data_ptr<float>(), it[1]->get_data_ptr<float>(), ot[0]->get_data_ptr<float>(),
+        input(0).get_shape(), input(1).get_shape(), get_autob());
+        return true;
+    }
+    return false;
 }
 
 shared_ptr<Node> op::SquaredDifference::clone_with_new_inputs(const OutputVector& new_args) const

@@ -38,6 +38,7 @@
 #include "legacy/ngraph_ops/rnn_sequence_ie.hpp"
 #include "legacy/ngraph_ops/lstm_sequence_ie.hpp"
 #include "legacy/ngraph_ops/gru_sequence_ie.hpp"
+#include "ngraph_ops/subgraph.hpp"
 #include "generic_ie.hpp"
 #include "exec_graph_info.hpp"
 
@@ -1257,8 +1258,18 @@ void convertFunctionToICNNNetwork(const std::shared_ptr<const ::ngraph::Function
 
         // Set originalLayersNames from FusedNames
         std::string originalNames = ::ngraph::getFusedNames(layer);
+
         if (!originalNames.empty()) {
             cnnLayer->params[ExecGraphInfoSerialization::ORIGINAL_NAMES] = originalNames;
+        }
+
+        if (auto subgraph = ::ngraph::as_type_ptr<ngraph::op::Subgraph>(layer)) {
+            std::string names = "";
+            for (auto& op : subgraph->get_body()->get_ordered_ops()) {
+                names += " \n" + op->get_friendly_name();
+            }
+
+            cnnLayer->params["originalLayersNames"] += names;
         }
 
         std::string primitivesPriority = ::ngraph::getPrimitivesPriority(layer);

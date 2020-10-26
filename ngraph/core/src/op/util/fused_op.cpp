@@ -17,6 +17,7 @@
 #include "ngraph/op/util/fused_op.hpp"
 
 #include "ngraph/graph_util.hpp"
+// #include "ngraph/op/get_output_element.hpp"
 
 using namespace ngraph;
 
@@ -46,6 +47,20 @@ void op::util::FusedOp::validate_and_infer_types()
     for (auto& val : input_values())
         nodes.emplace_back(val.get_node_shared_ptr());
     auto subgraph = extract_subgraph(ngraph::as_node_vector(subgraph_outputs), nodes);
+
+    // FIXME: check if fused op has multiple outputs
+    // auto args = get_arguments();
+    // decltype(args) arg_nodes;
+    // std::transform(std::begin(args), std::end(args), std::back_inserter(arg_nodes), [] (const std::shared_ptr<Node>& arg) {
+    //     if (as_type_ptr<ngraph::op::v0::GetOutputElement>(arg)) {
+    //         return arg->get_input_node_shared_ptr(0);
+    //     } else {
+    //         return arg;
+    //     }
+    // });
+
+    // auto subgraph = extract_subgraph(subgraph_outputs, arg_nodes);
+
     validate_nodes_and_infer_types(subgraph);
 
     size_t i = 0;

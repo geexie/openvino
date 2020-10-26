@@ -47,6 +47,9 @@
 #include "transformations/op_conversions/hsigmoid_decomposition.hpp"
 #include "transformations/op_conversions/log_softmax_decomposition.hpp"
 
+#include "transformations/collapse_subgraph.hpp"
+#include "transformations/convert_gelu.hpp"
+
 #include <ngraph/pass/manager.hpp>
 #include <ngraph/pass/constant_folding.hpp>
 
@@ -66,12 +69,14 @@ bool ngraph::pass::CommonOptimizations::run_on_function(std::shared_ptr<ngraph::
     manager.register_pass<ngraph::pass::ConstantFolding>();
     manager.register_pass<ngraph::pass::ConvertScatterElementsToScatter>(); // partially depends on CF
     manager.register_pass<ngraph::pass::DepthToSpaceFusion>();
+#if !defined(TOKENIZE_SNIPPETS)
     manager.register_pass<ngraph::pass::MishFusion>();
     manager.register_pass<ngraph::pass::SoftPlusFusion>();
     manager.register_pass<ngraph::pass::SoftPlusToMishFusion>();
     manager.register_pass<ngraph::pass::SwishFusion>();
     manager.register_pass<ngraph::pass::HSwishFusion>();
     manager.register_pass<ngraph::pass::HSigmoidFusion>();
+#endif
     manager.register_pass<ngraph::pass::ConvertPadToGroupConvolution, false>();
     manager.register_pass<ngraph::pass::NormalizeL2Fusion>();
 

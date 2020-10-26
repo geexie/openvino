@@ -12,6 +12,7 @@
 #include <unordered_map>
 #include <memory>
 #include <utility>
+#include <regex>
 
 #include "mkldnn_graph.h"
 #include "mkldnn_graph_dumper.h"
@@ -44,10 +45,19 @@
  *    additional information to std output.
  *
  *****************************************************/
-// #define BLOB_DUMP_PATH "mkldnn_dump"
-// #define PRINT_GRAPH_INFO
-// #define DUMP_AS_TEXT
-// #define DUMP_INTERNAL_BLOBS
+// #define BLOB_DUMP_PATH "/Users/mkolpako/bench-08-01-2020/mobilenet/regression/snippets"
+// #define BLOB_DUMP_PATH "/Users/mkolpako/bench-08-01-2020/uncased/regression/snippets"
+// #define BLOB_DUMP_PATH "/Users/mkolpako/bench-08-01-2020/asl/regression/snippets"
+// #define BLOB_DUMP_PATH "/Users/mkolpako/bench-08-01-2020/reid/regression/snippets"
+// #define BLOB_DUMP_PATH "/Users/mkolpako/bench-08-01-2020/attrs/regression/snippets"
+// #define BLOB_DUMP_PATH "/Users/mkolpako/bench-08-01-2020/large/regression/snippets"
+// #define BLOB_DUMP_PATH "/Users/mkolpako/bench-08-01-2020/small/regression/snippets"
+
+// #define BLOB_DUMP_PATH "/Users/mkolpako/bench-08-01-2020/"
+//  #define PRINT_GRAPH_INFO
+//  #define DUMP_AS_TEXT
+ //#define DUMP_INTERNAL_BLOBS
+// #define CHECK_REFERENCE
 
 #ifdef BLOB_DUMP_PATH
 #   define DUMP_DIR        BLOB_DUMP_PATH
@@ -97,7 +107,9 @@ void MKLDNNGraph::CreateGraph(const NET &net, const MKLDNNExtensionManager::Ptr&
     weightsCache = config.streamExecutorConfig._streams != 1 ? w_cache : nullptr;
 
     Replicate(net, extMgr);
+    std::cout << "replicate" << std::endl;
     InitGraph();
+    std::cout << "init" << std::endl;
     status = Ready;
 }
 
@@ -226,9 +238,11 @@ void MKLDNNGraph::Replicate(const ICNNNetwork &network, const MKLDNNExtensionMan
 
     auto _parent_port = [] (const DataPtr &data) -> int {
         auto parent = getCreatorLayer(data).lock();
-        for (int i = 0; parent->outData.size(); i++)
-            if (data == parent->outData[i])
-                return i;
+        if (parent) {
+            for (int i = 0; parent->outData.size(); i++)
+                if (data == parent->outData[i])
+                    return i;
+        }
         return -1;
     };
 
@@ -333,12 +347,21 @@ void MKLDNNGraph::InitGraph() {
     MKLDNNGraphOptimizer optimizer;
 
     SortTopologically();
+    std::cout << "SortTopologically" << std::endl;
     InitNodes();
-
+    std::cout << "InitNodes" << std::endl;
+    // #define BENCHMARK_BARE
+    #if defined(BENCHMARK_BARE)
+    // benchmark agains what comes after legacy conversion
+    #else
     optimizer.ApplyCommonGraphOptimizations(*this);
+    #endif
+    std::cout << "ApplyCommonGraphOptimizations" << std::endl;
     SortTopologically();
+    std::cout << "SortTopologically" << std::endl;
 
     InitDescriptors();
+    std::cout << "init descriptors" << std::endl;
 
     InitOptimalPrimitiveDescriptors();
 
@@ -352,6 +375,12 @@ void MKLDNNGraph::InitGraph() {
     CreatePrimitives();
 
     SetOriginalLayerNames();
+
+#define DEBUG_SNIPPETS
+#if defined DEBUG_SNIPPETS
+    static int qq = 0;
+    dumpToDotFile(std::string("exec") + std::to_string(qq) + "_init.dot");
+#endif
 
     if (!config.dumpToDot.empty())
         dumpToDotFile(config.dumpToDot + "_init.dot");
@@ -460,6 +489,15 @@ void MKLDNNGraph::ExecuteConstantNodesOnly() {
     }
 }
 
+std::ostream& operator<<(std::ostream& os, const MKLDNNDims& dt) {
+    os << "< ";
+    for (auto d : dt.ToSizeVector()) {
+        os << d << " ";
+    }
+    os << ">";
+    return os;
+}
+
 void MKLDNNGraph::InitEdges() {
     OV_ITT_SCOPED_TASK(itt::domains::MKLDNN_LT, "MKLDNNGraph::InitEdges");
 
@@ -472,6 +510,13 @@ void MKLDNNGraph::InitEdges() {
 
     for (auto i = 0; i < numberOfEdges; i++) {
         if (graphEdges[i]->needReorder()) {
+            std::cout << "Needs reorder: " << graphEdges[i]->getParent()->getName()
+                      << " (" << graphEdges[i]->getParent()->outDims.size()
+                      << ", " << graphEdges[i]->getParent()->outDims[0] << ")"
+                      << " -> " << graphEdges[i]->getChild()->getName()
+                      << " (" << graphEdges[i]->getChild()->inDims.size()
+                      << ", " << graphEdges[i]->getChild()->inDims[0] << ")" << std::endl;
+
 #if defined (COMPILED_CPU_MKLDNN_REORDER_NODE)
             auto &edge = graphEdges[i];
             std::string basicLayerName = edge->getParent()->getName() + "_" +
@@ -765,6 +810,8 @@ void MKLDNNGraph::Infer(int batch) {
         THROW_IE_EXCEPTION << "Wrong state. Topology is not ready.";
     }
 
+    // auto prefix = "snippet";
+
     mkldnn::stream stream = mkldnn::stream(stream::kind::eager);
     for (int i = 0; i < graphNodes.size(); i++) {
         PERF(graphNodes[i]);
@@ -772,14 +819,25 @@ void MKLDNNGraph::Infer(int batch) {
         if (batch > 0)
             graphNodes[i]->setDynamicBatchLim(batch);
 
-        ENABLE_DUMP(do_before(DUMP_DIR, graphNodes[i]));
+        if ("Output" == graphNodes[i]->getTypeStr()) {
+            ENABLE_DUMP(do_before(DUMP_DIR, graphNodes[i]));
+        }
 
         if (!graphNodes[i]->isConstant()) {
             OV_ITT_SCOPED_TASK(itt::domains::MKLDNNPlugin, graphNodes[i]->profiling.execute);
             graphNodes[i]->execute(stream);
         }
 
-        ENABLE_DUMP(do_after(DUMP_DIR, graphNodes[i]));
+        // if ("Output" == graphNodes[i]->getTypeStr()) {
+        //     std::cout << "saving output!!!!!" << std::endl;
+            // ENABLE_DUMP(do_after(DUMP_DIR, graphNodes[i]));
+        // }
+
+        // std::cout << graphNodes[i]->getName() << " is done" << std::endl;
+
+        // if (graphNodes[i]->getName() == "320") {
+        //     THROW_IE_EXCEPTION << "Dump is ready.";
+        // }
     }
 
     if (infer_count != -1) infer_count++;
@@ -900,6 +958,10 @@ void MKLDNNGraph::GetPerfData(std::map<std::string, InferenceEngine::InferenceEn
         getPerfMapFor(perfMap, graphNodes[i]);
     }
 
+#if defined DEBUG_SNIPPETS
+    static int qq = 0;
+    dumpToDotFile(std::string("exec") + std::to_string(qq) + "_perf.dot");
+#endif
     if (!config.dumpToDot.empty()) dumpToDotFile(config.dumpToDot + "_perf.dot");
 }
 
@@ -1145,6 +1207,15 @@ void MKLDNNGraph::dumpToDotFile(std::string file) const {
     dot.close();
 }
 
+auto tokenize(const std::string& path) -> std::vector<std::string> {
+    std::vector<std::string> tokens;
+    const std::regex ws_re("\\/"); // path
+    std::copy(std::sregex_token_iterator(path.begin(), path.end(), ws_re, -1),
+              std::sregex_token_iterator(),
+              std::back_inserter(tokens));
+    return tokens;
+}
+
 void MKLDNNGraph::do_before(const std::string &dir, const MKLDNNNodePtr &node) {
     auto exec_order = std::to_string(node->execIndex);
     std::string nodeName = node->name;
@@ -1152,6 +1223,43 @@ void MKLDNNGraph::do_before(const std::string &dir, const MKLDNNNodePtr &node) {
     std::replace(nodeName.begin(), nodeName.end(), '/', '_');
     std::replace(nodeName.begin(), nodeName.end(), ' ', '_');
     std::replace(nodeName.begin(), nodeName.end(), ':', '-');
+
+    std::string specific_dir = dir;
+    if (_name == "mobilenet-v3-large-1.0-224") {
+        specific_dir += "/mobilenet/regression/snippets";
+    }
+
+    if (_name == "asl-recognition-0004") {
+        specific_dir += "/asl/regression/snippets";
+    }
+
+    if (_name == "person-reidentification-retail-0270") {
+        specific_dir += "/reid/regression/snippets";
+    }
+
+    if (_name == "person-attributes-recognition-crossroad-0230") {
+        specific_dir += "/attrs/regression/snippets";
+    }
+
+    if (_name == "bert-base-uncased") {
+        specific_dir += "/uncased/regression/snippets";
+    }
+
+    if (_name == "bert-large-uncased-whole-word-masking-squad-fp32-0001") {
+        specific_dir += "/large/regression/snippets";
+    }
+
+    if (_name == "bert-small-uncased-whole-word-masking-squad-0001") {
+        specific_dir += "/small/regression/snippets";
+    }
+
+// #define BLOB_DUMP_PATH "/Users/mkolpako/bench-08-01-2020/mobilenet/regression/snippets"
+// #define BLOB_DUMP_PATH "/Users/mkolpako/bench-08-01-2020/asl/regression/snippets"
+// #define BLOB_DUMP_PATH "/Users/mkolpako/bench-08-01-2020/reid/regression/snippets"
+// #define BLOB_DUMP_PATH "/Users/mkolpako/bench-08-01-2020/attrs/regression/snippets"
+// #define BLOB_DUMP_PATH "/Users/mkolpako/bench-08-01-2020/uncased/regression/snippets"
+// #define BLOB_DUMP_PATH "/Users/mkolpako/bench-08-01-2020/large/regression/snippets"
+// #define BLOB_DUMP_PATH "/Users/mkolpako/bench-08-01-2020/small/regression/snippets"
 
     auto num_ports = node->getSelectedPrimitiveDescriptor()->getConfig().inConfs.size();
     for (size_t i = 0; i < num_ports; i++) {
@@ -1165,12 +1273,84 @@ void MKLDNNGraph::do_before(const std::string &dir, const MKLDNNNodePtr &node) {
             file_name = file_name.substr(file_name.size() - 240);
 
 
-        auto dump_file = dir + "/#" + exec_order + "_" + file_name;
+        auto dump_file = specific_dir + "/#" + exec_order + "_" + file_name;
+        std::cout << file_name << std::endl;
+
+
         TensorDesc desc = prEdge->getDesc();
         if (desc.getPrecision() == Precision::BIN)
             continue;
 
         BlobDumper dumper(prEdge->getBlob());
+
+#if defined(CHECK_REFERENCE)
+        std::string ref_file = specific_dir.c_str();
+        ref_file.replace(ref_file.find("snippets", 0), std::string("snippets").length(), "ref");
+
+        auto tokens = tokenize(ref_file);
+
+        if (tokens[tokens.size()-3] == "asl") {
+            ref_file += "/#279_out_output_in0.ieb";
+        }
+
+        if (tokens[tokens.size()-3] == "mobilenet") {
+            ref_file += "/#205_out_logits_in0.ieb";
+        }
+
+        if (tokens[tokens.size()-3] == "uncased") {
+            ref_file += "/#727_out_bert_pooler_dense_Tanh_in0.ieb";
+        }
+
+        if (tokens[tokens.size()-3] == "reid") {
+            ref_file += "/#385_out_reid_embedding_in0.ieb";
+        }
+
+        if ("out_output_s_in0.ieb" == file_name) {
+            ref_file += "/#955_out_output_s_in0.ieb";
+        }
+        if ("out_output_e_in0.ieb" == file_name) {
+            ref_file += "/#958_out_output_e_in0.ieb";
+        }
+
+        if ("out_3171_in0.ieb" == file_name) {
+            ref_file += "/#1763_out_3171_in0.ieb";
+        }
+        if ("out_3172_in0.ieb" == file_name) {
+            ref_file += "/#1766_out_3172_in0.ieb";
+        }
+
+        if ("out_453_in0.ieb" == file_name) {
+            ref_file += "/#114_out_453_in0.ieb";
+        }
+
+        if ("out_456_in0.ieb" == file_name) {
+            ref_file += "/#118_out_456_in0.ieb";
+        }
+
+        if ("out_459_in0.ieb" == file_name) {
+            ref_file += "/#122_out_459_in0.ieb";
+        }
+
+        std::cout << this->_name << std::endl;
+        std::cout << ref_file << std::endl;
+        std::cout << file_name << std::endl;
+
+        BlobDumper refDumper = BlobDumper::read(ref_file);
+
+        auto refBlob = refDumper.get();
+        const float* ref = refBlob->cbuffer().as<float*>();
+        const float* act = prEdge->getBlob()->cbuffer().as<float*>();
+
+        for (int k = 0; k < prEdge->getBlob()->size(); k++) {
+            std::cout << i << ": " << k << ": " << ref[k] << " " << act[k] << " " << std::abs(ref[k]-act[k]) << std::endl;
+            if (std::abs(ref[k]-act[k]) > /*1e-3*/6e-6 || std::isnan(ref[k]) != std::isnan(act[k])) {
+                // std::cout << i << ": " << k << ": " << ref[k] << " " << act[k] << " " << std::abs(ref[k]-act[k]) << std::endl;
+                THROW_IE_EXCEPTION << ref[i] << " " << act[i] << " " << std::abs(ref[i]-act[i]);
+            }
+        }
+
+        std::cout << "overall topology accuracy is OK " << dump_file << std::endl;
+#endif
         if (pr->ext_scales) dumper.withScales(pr->ext_scales);
 #ifdef DUMP_AS_TEXT
         dumper.dumpAsTxt(dump_file);
@@ -1205,6 +1385,8 @@ void MKLDNNGraph::do_after(const std::string &dir, const MKLDNNNodePtr &node) {
     std::replace(nodeName.begin(), nodeName.end(), ':', '-');
 
     auto num_ports = node->getSelectedPrimitiveDescriptor()->getConfig().outConfs.size();
+
+    std::cout << "inside do_after " << node->getTypeStr() << " " << num_ports << std::endl;
     for (size_t i = 0; i < num_ports; i++) {
         auto childEdge = node->getChildEdgeAt(i);
 

@@ -103,6 +103,8 @@ set(LAYERS
     ${CMAKE_CURRENT_SOURCE_DIR}/nodes/proposal.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/nodes/proposal_imp.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/nodes/cum_sum.cpp
+
+    ${CMAKE_CURRENT_SOURCE_DIR}/nodes/subgraph.cpp
 )
 
 foreach(LAYER ${LAYERS})

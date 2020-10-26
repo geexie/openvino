@@ -30,8 +30,15 @@ ie_add_vs_version_file(NAME ${TARGET_NAME}
 target_link_libraries(${TARGET_NAME} PUBLIC ${NGRAPH_LIBRARIES}
                                      PRIVATE openvino::itt ngraph::builder pugixml)
 
+target_link_libraries(${TARGET_NAME} PUBLIC ${NGRAPH_LIBRARIES} mkldnn)
+
 target_include_directories(${TARGET_NAME} PUBLIC ${PUBLIC_HEADERS_DIR}
                                           PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src")
+
+target_include_directories(${TARGET_NAME} SYSTEM PUBLIC
+        ${IE_MAIN_SOURCE_DIR}/thirdparty/mkl-dnn/src/common
+        ${IE_MAIN_SOURCE_DIR}/thirdparty/mkl-dnn/src/cpu
+        ${IE_MAIN_SOURCE_DIR}/thirdparty/mkl-dnn/include)
 
 add_cpplint_target(${TARGET_NAME}_cpplint FOR_TARGETS ${TARGET_NAME})
 
