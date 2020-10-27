@@ -45,7 +45,6 @@ public:
 
 protected:
     void generate_snippet(std::shared_ptr<ngraph::Function>& body) const override;
-    void generate_tile(std::shared_ptr<ngraph::Function>& body) const override;
 
 private:
     // FIXME: use TargetMachine or something

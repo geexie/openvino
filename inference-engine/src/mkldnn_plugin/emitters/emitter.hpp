@@ -20,7 +20,7 @@ public:
     // FIXME: not sure about representing presision, should be some ngraph variant or something, most likely it should be taken from a node itself
     jit_emitter(mkldnn::impl::cpu::jit_generator* host, mkldnn::impl::cpu::cpu_isa_t host_isa, const std::shared_ptr<ngraph::Node>& n,
                 InferenceEngine::Precision exec_prc = InferenceEngine::Precision::FP32)
-        : Emitter(n), h(host), host_isa_(host_isa), exec_prc_(exec_prc) {
+        : Emitter(n), h(host), host_isa_(host_isa), exec_prc_(exec_prc), l_table (new Xbyak::Label()) {
         k_mask = Xbyak::Opmask(1); // FIXME: in general case we need preserve k_mask state as well
     }
 
@@ -51,7 +51,7 @@ protected:
     virtual void prepare_table();
     virtual void register_table_entries() {}
 
-    void load_table_addr() const { h->mov(p_table, l_table); }
+    void load_table_addr() const { h->mov(p_table, *l_table.get()); }
 
     // we accept only 32bit hexadecimal table values to avoid any rounding
     using table_entry_val_t = uint32_t;
@@ -69,7 +69,7 @@ protected:
     };
 
     mutable Xbyak::Reg64 p_table;
-    mutable Xbyak::Label l_table;
+    mutable std::shared_ptr<Xbyak::Label> l_table;
 
     enum {
         _cmp_eq_oq = mkldnn::impl::cpu::jit_generator::_cmp_eq_oq,

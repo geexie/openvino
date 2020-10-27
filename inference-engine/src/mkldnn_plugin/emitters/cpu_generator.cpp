@@ -120,23 +120,46 @@ code CPUGenerator::generate(std::shared_ptr<ngraph::Function>& f) const {
         remark(13) << "op " << qqq++ << " " << op->get_friendly_name() << " (" << op->get_type_name() << ") " << op << std::endl;
     }
 
-    generate_tile(f);
+    generate_snippet(f);
 
     return h->getCode();
 }
 
  void CPUGenerator::generate_snippet(std::shared_ptr<ngraph::Function>& f) const {
- }
+    h->preamble();
 
-void CPUGenerator::generate_tile(std::shared_ptr<ngraph::Function>& f) const {
-    /// vector tile
-    std::vector<std::shared_ptr<Emitter>> lowered;
-    std::vector<RegInfo> reginfo;
+    auto params = f->get_parameters();
+    auto results = f->get_results();
+
+    auto nparams = f->get_results().size() + f->get_parameters().size();
+    Xbyak::Reg64 amount = Xbyak::Reg64(reg64_tmp_start+nparams);
+
+    if (nparams > 7) {
+        throw ngraph_error(std::string("snippet signature should not exceed 7 arguments. got") + std::to_string(nparams));
+    }
+
+    std::vector<Xbyak::Reg64> regs(nparams);
+    for (auto i = 0; i < regs.size(); i++) {
+        regs[i] = Xbyak::Reg64(reg64_tmp_start+i);
+    }
+
+    for (auto i = 0; i < params.size(); i++) {
+        h->mov(regs[i], h->ptr[param + i*sizeof(size_t)]);
+    }
+
+    for (auto i = 0; i < results.size(); i++) {
+        h->mov(regs[params.size()+i], h->ptr[param + (params.size()+i)*sizeof(size_t)]);
+    }
+
+    h->mov(amount, h->ptr[param + sizeof(size_t)*nparams]);
+
+    // vector tile
+    std::vector<std::pair<std::shared_ptr<Emitter>, RegInfo>> lowered;
 
     for (auto n : f->get_ordered_ops()) {
-        reginfo.push_back(ngraph::snippet::getRegisters(n));
+        // reginfo.push_back(ngraph::snippet::getRegisters(n));
         if (jitters.find(n->get_type_info()) != jitters.end()) {
-            lowered.push_back(jitters[n->get_type_info()](n));
+            lowered.push_back(std::make_pair(jitters[n->get_type_info()](n), ngraph::snippet::getRegisters(n)));
         } else {
             throw ngraph::ngraph_error(std::string("unknown operation ") + n->get_type_info().name);
         }
@@ -151,84 +174,28 @@ void CPUGenerator::generate_tile(std::shared_ptr<ngraph::Function>& f) const {
         remark(13) << "op " << qqq++ << " " << op->get_friendly_name() << " (" << op->get_type_name() << ") " << op << std::endl;
     }
 
-    std::vector<std::shared_ptr<Emitter>> scalar_lowered;
-    std::vector<RegInfo> scalar_reginfo;
+    std::vector<std::pair<std::shared_ptr<Emitter>, RegInfo>> scalar_lowered;
 
     for (auto n : f_scalar->get_ordered_ops()) {
-        scalar_reginfo.push_back(ngraph::snippet::getRegisters(n));
+        // scalar_reginfo.push_back(ngraph::snippet::getRegisters(n));
         if (jitters.find(n->get_type_info()) != jitters.end()) {
-            scalar_lowered.push_back(jitters[n->get_type_info()](n));
+            scalar_lowered.push_back(make_pair(jitters[n->get_type_info()](n), ngraph::snippet::getRegisters(n)));
         } else {
             throw ngraph::ngraph_error(std::string("unknown operation ") + n->get_type_info().name);
         }
     }
 
-    h->preamble();
+    std::vector<std::shared_ptr<Emitter>> tiles;
+    tiles.push_back(std::make_shared<TileEmitter>(h.get(), isa, f, lowered));
+    tiles.push_back(std::make_shared<TileEmitter>(h.get(), isa, f_scalar, scalar_lowered));
 
-    auto params = f->get_parameters();
-    auto results = f->get_results();
-
-    auto nparams = f->get_results().size() + f->get_parameters().size();
-    Xbyak::Reg64 amount = Xbyak::Reg64(reg64_tmp_start+nparams);
-
-    if (params.size()+results.size() > 7) {
-        throw ngraph_error(std::string("snippet signature should not exceed 7 arguments. got") + std::to_string(params.size()+results.size()));
-    }
-
-    {
-        std::vector<Xbyak::Reg64> regs(params.size()+results.size());
-        for (auto i = 0; i < regs.size(); i++) {
-            regs[i] = Xbyak::Reg64(reg64_tmp_start+i);
-        }
-
-        for (auto i = 0; i < params.size(); i++) {
-            h->mov(regs[i], h->ptr[param + i*sizeof(size_t)]);
-        }
-
-        for (auto i = 0; i < results.size(); i++) {
-            h->mov(regs[params.size()+i], h->ptr[param + (params.size()+i)*sizeof(size_t)]);
-        }
-
-
-        h->mov(amount, h->ptr[param + sizeof(size_t)*nparams]);
-    }
-
-#if 1
-    // configure tile variants
-    size_t vlen = mkldnn::impl::cpu::cpu_isa_traits<mkldnn::impl::cpu::avx2>::vlen;
-    std::array<size_t, 2> nloads   = {vlen / sizeof(float), 1};
-    std::array<std::shared_ptr<ngraph::Function>, 2> bodies   = {f, f_scalar};
-    std::array<Xbyak::Label, nloads.size() + 1> for_body;
-
-    std::array<std::vector<std::shared_ptr<Emitter>>, 2> lowered_ops = {lowered, scalar_lowered};
-    std::array<std::vector<RegInfo>, 2> reginfos   = {reginfo, scalar_reginfo};
-
-    // generate both vector and scalar loops
-    for (int loopId = 0; loopId < nloads.size(); loopId++) {
-        // loop_entry()
-        h->cmp(amount, nloads[loopId]);
-        h->jl(for_body[loopId+1], jit_snippet::T_NEAR);
-
-        // loop_body()
-        h->L(for_body[loopId]); {
-        for (size_t i = 0; i < lowered_ops[loopId].size(); i++) {
-            auto regs = reginfos[loopId][i];
-            lowered_ops[loopId][i]->emit(regs.first, regs.second);
-        }
-            // loop_advance()
-            h->sub(amount, nloads[loopId]);
-            h->cmp(amount, nloads[loopId]);
-            h->jge(for_body[loopId], jit_snippet::T_NEAR);
-        }
-    }
-
-    h->L(for_body[nloads.size()]);
-#endif
+    tiles[0]->emit({mkldnn::impl::cpu::cpu_isa_traits<mkldnn::impl::cpu::avx2>::vlen / sizeof(float)}, {});
+    tiles[1]->emit({1}, {});
 
     h->postamble();
-    for (int loopId = 0; loopId < nloads.size(); loopId++) {
-        for (size_t i = 0; i < lowered_ops[loopId].size(); i++) {
-            lowered_ops[loopId][i]->emit_table();
-        }
+
+    lowered.insert(lowered.end(), scalar_lowered.begin(), scalar_lowered.end());
+    for (auto& op : lowered) {
+        op.first->emit_table();
     }
-}
+ }

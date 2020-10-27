@@ -49,19 +49,52 @@ private:
 
 class TileEmitter : public MKLDNNPlugin::jit_emitter {
 public:
-    TileEmitter(mkldnn::impl::cpu::jit_generator* h, mkldnn::impl::cpu::cpu_isa_t isa, const std::shared_ptr<ngraph::Node>& n)
-    : jit_emitter(h, isa, n) {
-        remark(10) << "SubgraphEmitter: " << n->get_friendly_name() << n->get_type_info().name << std::endl;
+    TileEmitter(mkldnn::impl::cpu::jit_generator* h, mkldnn::impl::cpu::cpu_isa_t isa, const std::shared_ptr<ngraph::Function>& f,
+    const std::vector<std::pair<std::shared_ptr<Emitter>, ngraph::snippet::RegInfo>> c)
+    : jit_emitter(h, isa, nullptr) {
+        code = c;
+
+        nparams = f->get_results().size() + f->get_parameters().size();
+        remark(10) << "SubgraphEmitter: " << f->get_friendly_name() << f->get_type_info().name << std::endl;
     }
 
     size_t get_inputs_num() override {return 0;}
+
+    void emit(const std::vector<size_t> &in, const std::vector<size_t> &out,
+              const std::vector<size_t> &pool = {}, const std::vector<size_t> &gpr = {}) const override {
+        emit_impl(in, out, pool, gpr);
+    }
 
 private:
     void emit_impl(const std::vector<size_t>& in,
                    const std::vector<size_t>& out,
                    const std::vector<size_t>& pool = {},
                    const std::vector<size_t>& gpr  = {}) const override {
+        Xbyak::Reg64 amount = Xbyak::Reg64(reg64_tmp_start+nparams);
+        size_t nloads   = in[0];// {mkldnn::impl::cpu::cpu_isa_traits<mkldnn::impl::cpu::avx2>::vlen / sizeof(float)};
+
+        std::array<Xbyak::Label, 2> for_body;
+        // loop_entry()
+        h->cmp(amount, nloads);
+        h->jl(for_body[1], Xbyak::CodeGenerator::T_NEAR);
+
+        // loop_body()
+        h->L(for_body[0]); {
+            for (size_t i = 0; i < code.size(); i++) {
+                auto regs = code[i].second;
+                code[i].first->emit(regs.first, regs.second);
+            }
+            // loop_advance()
+            h->sub(amount, nloads);
+            h->cmp(amount, nloads);
+            h->jge(for_body[0], Xbyak::CodeGenerator::T_NEAR);
+        }
+
+        h->L(for_body[1]);
     }
+
+    std::vector<std::pair<std::shared_ptr<Emitter>, ngraph::snippet::RegInfo>> code;
+    size_t nparams;
 };
 
 class NopEmitter : public MKLDNNPlugin::jit_emitter {

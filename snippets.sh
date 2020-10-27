@@ -1,5 +1,7 @@
 #!/bin/sh
 
+set -e
+
 ../bin/intel64/Release/benchmark_app \
     -exec_graph_path ./attrs.xml \
     -nthreads 1 -nstreams 1 \

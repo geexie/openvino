@@ -45,6 +45,7 @@ public:
 protected:
     // hierarchical IR
     // -snippet - vector of tiles
+    //  - parameters gethering
     //  - tile - single body ~ subgraph
     //   - body
     //     - op
@@ -55,8 +56,8 @@ protected:
     //    - op
     //    - op
     //    - op
+    // - data constant table
     virtual void generate_snippet(std::shared_ptr<ngraph::Function>& body) const = 0;
-    virtual void generate_tile(std::shared_ptr<ngraph::Function>& body) const = 0;
 
     mutable std::map<const ngraph::DiscreteTypeInfo, std::function<std::shared_ptr<Emitter>(std::shared_ptr<ngraph::Node>)>> jitters;
 };
