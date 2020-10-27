@@ -226,8 +226,12 @@ static void Transformation(ICNNNetwork::Ptr& clonedNetwork, const Config& conf) 
     }
 
 #if defined(TOKENIZE_SNIPPETS)
-    manager.register_pass<ngraph::pass::CollapseSubgraph>();
+    std::cout << "Tokenization is ON" << std::endl;
+    ngraph::pass::Manager tokenization_manager;
+    tokenization_manager.register_pass<ngraph::pass::CollapseSubgraph>();
+    tokenization_manager.run_passes(nGraphFunc);
 #endif
+
     ngraph::pass::Manager legacyManager;
     legacyManager.register_pass<ngraph::pass::ConvertOpSet1ToLegacy>();
     legacyManager.register_pass<ngraph::pass::ConvertPrecision>(ngraph::element::i64, ngraph::element::i32);
