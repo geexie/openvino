@@ -18,6 +18,12 @@ struct Config {
         On,
     };
 
+    enum TokenizationMode {
+        Disabled,
+        Node,
+        Subgraph
+    };
+
     bool collectPerfCounters = false;
     bool exclusiveAsyncRequests = false;
     bool enableDynamicBatch = false;
@@ -35,6 +41,8 @@ struct Config {
     LPTransformsMode lpTransformsMode = LPTransformsMode::On;
     bool enforceBF16 = true;
 #endif
+
+    TokenizationMode tokenizationMode = TokenizationMode::Subgraph;
 
     void readProperties(const std::map<std::string, std::string> &config);
     void updateProperties();

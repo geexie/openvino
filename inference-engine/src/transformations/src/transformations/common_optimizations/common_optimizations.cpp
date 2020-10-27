@@ -68,14 +68,12 @@ bool ngraph::pass::CommonOptimizations::run_on_function(std::shared_ptr<ngraph::
     manager.register_pass<ngraph::pass::ConstantFolding>();
     manager.register_pass<ngraph::pass::ConvertScatterElementsToScatter>(); // partially depends on CF
     manager.register_pass<ngraph::pass::DepthToSpaceFusion>();
-#if !defined(TOKENIZE_SNIPPETS)
     manager.register_pass<ngraph::pass::MishFusion>();
     manager.register_pass<ngraph::pass::SoftPlusFusion>();
     manager.register_pass<ngraph::pass::SoftPlusToMishFusion>();
     manager.register_pass<ngraph::pass::SwishFusion>();
     manager.register_pass<ngraph::pass::HSwishFusion>();
     manager.register_pass<ngraph::pass::HSigmoidFusion>();
-#endif
     manager.register_pass<ngraph::pass::ConvertPadToGroupConvolution, false>();
     manager.register_pass<ngraph::pass::NormalizeL2Fusion>();
 
@@ -109,13 +107,11 @@ bool ngraph::pass::CommonOptimizations::run_on_function(std::shared_ptr<ngraph::
 
     // LinOpSequenceFusion must be executed after all decompositions
     manager.register_pass<ngraph::pass::LinOpSequenceFusion>();
-#if !defined(TOKENIZE_SNIPPETS)
     manager.register_pass<ngraph::pass::ConvolutionMultiplyFusion>();
     manager.register_pass<ngraph::pass::GroupConvolutionMultiplyFusion>();
     manager.register_pass<ngraph::pass::ConvolutionBackpropDataMultiplyFusion>();
     manager.register_pass<ngraph::pass::GroupConvolutionBackpropDataMultiplyFusion>();
     manager.register_pass<ngraph::pass::ConstantFolding>();
-#endif
     manager.register_pass<ngraph::pass::ConvertInterpolate1ToInterpolate4, false>();
 
     auto fq_fusions = manager.register_pass<ngraph::pass::GraphRewrite>();

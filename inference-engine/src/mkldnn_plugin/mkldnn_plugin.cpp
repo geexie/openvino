@@ -33,6 +33,13 @@
 
 #include <transformations/common_optimizations/common_optimizations.hpp>
 #include <transformations/common_optimizations/depth_to_space_fusion.hpp>
+#include "transformations/common_optimizations/hsigmoid_fusion.hpp"
+#include "transformations/common_optimizations/hswish_fusion.hpp"
+#include "transformations/common_optimizations/mish_fusion.hpp"
+#include "transformations/common_optimizations/softplus_fusion.hpp"
+#include "transformations/common_optimizations/softplus_to_mish_fusion.hpp"
+#include "transformations/common_optimizations/swish_fusion.hpp"
+#include "transformations/common_optimizations/conv_mul_fusion.hpp"
 #include <transformations/op_conversions/convert_depth_to_space.hpp>
 #include <transformations/op_conversions/convert_space_to_depth.hpp>
 #include <transformations/op_conversions/convert_gelu.hpp>
@@ -193,16 +200,29 @@ static void Transformation(ICNNNetwork::Ptr& clonedNetwork, const Config& conf) 
             });
 
     // List of enabled/disabled transformations
-#if !defined(TOKENIZE_SNIPPETS)
-    pass_config->disable<ngraph::pass::ConvertGELU>();
-    pass_config->disable<ngraph::pass::HSwishDecomposition>();
-    pass_config->disable<ngraph::pass::ReduceL1Decomposition>();
-    pass_config->disable<ngraph::pass::ReduceL2Decomposition>();
-    pass_config->disable<ngraph::pass::SoftPlusDecomposition>();
-    pass_config->disable<ngraph::pass::HSigmoidDecomposition>();
-    pass_config->disable<ngraph::pass::ConvertMod>();
-    pass_config->disable<ngraph::pass::LogSoftmaxDecomposition>();
-#endif
+    if (conf.tokenizationMode == Config::TokenizationMode::Disabled) {
+        pass_config->disable<ngraph::pass::ConvertGELU>();
+        pass_config->disable<ngraph::pass::HSwishDecomposition>();
+        pass_config->disable<ngraph::pass::ReduceL1Decomposition>();
+        pass_config->disable<ngraph::pass::ReduceL2Decomposition>();
+        pass_config->disable<ngraph::pass::SoftPlusDecomposition>();
+        pass_config->disable<ngraph::pass::HSigmoidDecomposition>();
+        pass_config->disable<ngraph::pass::ConvertMod>();
+        pass_config->disable<ngraph::pass::LogSoftmaxDecomposition>();
+    } else {
+        pass_config->disable<ngraph::pass::MishFusion>();
+        pass_config->disable<ngraph::pass::SoftPlusFusion>();
+        pass_config->disable<ngraph::pass::SoftPlusToMishFusion>();
+        pass_config->disable<ngraph::pass::SwishFusion>();
+        pass_config->disable<ngraph::pass::HSigmoidFusion>();
+        pass_config->disable<ngraph::pass::HSwishFusion>();
+
+        pass_config->disable<ngraph::pass::ConvolutionMultiplyFusion>();
+        pass_config->disable<ngraph::pass::GroupConvolutionMultiplyFusion>();
+        pass_config->disable<ngraph::pass::ConvolutionBackpropDataMultiplyFusion>();
+        pass_config->disable<ngraph::pass::GroupConvolutionBackpropDataMultiplyFusion>();
+    }
+
     pass_config->enable<ngraph::pass::ConvertPadToGroupConvolution>();
 
     manager.run_passes(nGraphFunc);
@@ -225,12 +245,12 @@ static void Transformation(ICNNNetwork::Ptr& clonedNetwork, const Config& conf) 
         transformer.transform(nGraphFunc);
     }
 
-#if defined(TOKENIZE_SNIPPETS)
-    std::cout << "Tokenization is ON" << std::endl;
-    ngraph::pass::Manager tokenization_manager;
-    tokenization_manager.register_pass<ngraph::pass::CollapseSubgraph>();
-    tokenization_manager.run_passes(nGraphFunc);
-#endif
+    if (conf.tokenizationMode != Config::TokenizationMode::Disabled) {
+        std::cout << "Tokenization is ON" << std::endl;
+        ngraph::pass::Manager tokenization_manager;
+        tokenization_manager.register_pass<ngraph::pass::CollapseSubgraph>(conf.tokenizationMode == Config::TokenizationMode::Node);
+        tokenization_manager.run_passes(nGraphFunc);
+    }
 
     ngraph::pass::Manager legacyManager;
     legacyManager.register_pass<ngraph::pass::ConvertOpSet1ToLegacy>();
