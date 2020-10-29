@@ -21,6 +21,16 @@ jit_mkldnn_emitter::jit_mkldnn_emitter(jit_generator *host, cpu_isa_t host_isa, 
     set_injector();
 }
 
+jit_mkldnn_emitter::jit_mkldnn_emitter(jit_generator *host, cpu_isa_t host_isa, const MKLDNNNode& node, InferenceEngine::Precision exec_prc)
+    : jit_emitter(host, host_isa, node, exec_prc) {
+    auto& eltwiseNode = dynamic_cast<const MKLDNNEltwiseNode&>(node);
+    kind = static_cast<mkldnn_alg_kind_t>(eltwiseNode.getAlgorithm());
+    alpha = 0.f;
+    beta = 0.f;
+
+    set_injector();
+}
+
 void jit_mkldnn_emitter::set_injector() {
     if (host_isa_ == cpu::sse42) {
         eltwise_injector_sse42 = std::make_shared<jit_uni_eltwise_injector_f32<cpu::sse42>>(h, kind, alpha, beta);
@@ -68,5 +78,24 @@ void jit_mkldnn_emitter::emit_table() {
     }
 }
 
+jit_mkldnn_aux_emitter::jit_mkldnn_aux_emitter(jit_generator *host, cpu_isa_t host_isa, const MKLDNNNode& node, InferenceEngine::Precision exec_prc)
+    : jit_mkldnn_emitter(host, host_isa, node, exec_prc) {
+    // auto& eltwiseNode = dynamic_cast<const MKLDNNEltwiseNode&>(n);
+
+    // auto alg = static_cast<mkldnn_alg_kind_t>(eltwiseNode.getAlgorithm());
+
+    // if (host_isa_ == cpu::sse42) {
+    //     eltwise_injector_sse42 = std::make_shared<jit_uni_eltwise_injector_f32<cpu::sse42>>(
+    //             host, alg, eltwiseNode.getAlpha(), eltwiseNode.getBeta());
+    // } else if (host_isa_ == cpu::avx2) {
+    //     eltwise_injector_avx2 = std::make_shared<jit_uni_eltwise_injector_f32<cpu::avx2>>(
+    //             host, alg, eltwiseNode.getAlpha(), eltwiseNode.getBeta());
+    // } else if (host_isa_ == cpu::avx512_common) {
+    //     eltwise_injector_avx512_common = std::make_shared<jit_uni_eltwise_injector_f32<cpu::avx512_common>>(
+    //             host, alg, eltwiseNode.getAlpha(), eltwiseNode.getBeta());
+    // } else {
+    //     assert(!"unsupported isa");
+    // }
+}
 
 } // namespace MKLDNNPlugin

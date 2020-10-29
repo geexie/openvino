@@ -24,6 +24,12 @@ public:
         k_mask = Xbyak::Opmask(1); // FIXME: in general case we need preserve k_mask state as well
     }
 
+    jit_emitter(mkldnn::impl::cpu::jit_generator* host, mkldnn::impl::cpu::cpu_isa_t host_isa, const MKLDNNNode& node,
+                InferenceEngine::Precision exec_prc = InferenceEngine::Precision::FP32)
+        : Emitter(nullptr), h(host), host_isa_(host_isa), /*n(node),*/ exec_prc_(exec_prc), l_table (new Xbyak::Label()) {
+        k_mask = Xbyak::Opmask(1); // FIXME: in general case we need preserve k_mask state as well
+    }
+
     void emit(const std::vector<size_t> &in_vec_idxs, const std::vector<size_t> &out_vec_idxs,
                       const std::vector<size_t> &pool_vec_idxs = {}, const std::vector<size_t> &pool_gpr_idxs = {}) const override;
 
@@ -40,7 +46,6 @@ protected:
     size_t get_max_vecs_count() const;
     size_t get_vec_length() const;
 
-    // const MKLDNNNode& n;
     mkldnn::impl::cpu::jit_generator* h;
     mkldnn::impl::cpu::cpu_isa_t host_isa_;
     InferenceEngine::Precision exec_prc_;

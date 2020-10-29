@@ -16,9 +16,9 @@
 #include <map>
 #include "jit_uni_eltwise.hpp"
 #include "jit_uni_quantization.hpp"
-#include "common/emitter.h"
-#include "jit_eltwise_emitters.hpp"
-#include "jit_mkldnn_emitters.hpp"
+#include "emitters/emitter.hpp"
+#include "emitters/jit_eltwise_emitters.hpp"
+#include "emitters/jit_mkldnn_emitters.hpp"
 #include "ref_eltwise.hpp"
 #include "mkldnn_pooling_node.h"
 
