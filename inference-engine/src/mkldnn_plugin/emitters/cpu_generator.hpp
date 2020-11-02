@@ -43,16 +43,10 @@ public:
 
     code generate(std::shared_ptr<Function>& f) const override;
 
-protected:
-    void generate_snippet(std::shared_ptr<ngraph::Function>& body) const override;
-
 private:
-    // FIXME: use TargetMachine or something
+    // FIXME: use TargetMachine or something. Jitters might be a part of target machine as well
     std::unique_ptr<mkldnn::impl::cpu::jit_generator> h;
     mkldnn::impl::cpu::cpu_isa_t isa;
-
-    int reg64_tmp_start { 8 }; // R8, R9, R10, R11, R12, R13, R14, R15 inputs+outputs+1
-    Xbyak::Reg64 param  { mkldnn::impl::cpu::abi_param1 }; // RDI
 };
 
 } // namespace snippet

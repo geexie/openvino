@@ -51,6 +51,7 @@ protected:
     InferenceEngine::Precision exec_prc_;
     // FIXME: move to register allocation
     int reg64_tmp_start { 8 }; // R8, R9, R10, R11, R12, R13, R14, R15 inputs+outputs+1
+    Xbyak::Reg64 param  { mkldnn::impl::cpu::abi_param1 }; // RDI
     Xbyak::Opmask k_mask;
 
     virtual void prepare_table();

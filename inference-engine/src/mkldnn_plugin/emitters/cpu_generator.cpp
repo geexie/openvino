@@ -25,8 +25,6 @@ using namespace ngraph;
 #define CREATE_EMITTER(e_type) [this](const std::shared_ptr<ngraph::Node>& n) -> std::shared_ptr<Emitter> {return std::make_shared<e_type>(h.get(), isa, n);};
 
 CPUGenerator::CPUGenerator() : h(new jit_snippet()), isa(mkldnn::impl::cpu::avx2) {
-    reg64_tmp_start = h->r8.getIdx();
-
     // data movement
     jitters[ngraph::opset1::Parameter().get_type_info()] = CREATE_EMITTER(NopEmitter);
     jitters[ngraph::op::BlockedParameter().get_type_info()] = CREATE_EMITTER(NopEmitter);
@@ -104,8 +102,24 @@ CPUGenerator::CPUGenerator() : h(new jit_snippet()), isa(mkldnn::impl::cpu::avx2
     // jitters[ngraph::opset1::Selu().get_type_info()] = CREATE_EMITTER(); // not supported
 
     // Also set tile jitter here.
-    // jitters[ngraph::op::Subgraph().get_type_info()] = CREATE_EMITTER(SubgraphEmitter);
-    // jitters[ngraph::op::Tile().get_type_info()] = CREATE_EMITTER(SubgraphEmitter);
+    // jitters[ngraph::op::Subgraph().get_type_info()] = CREATE_EMITTER(KernelEmitter);
+    // jitters[ngraph::op::Tile().get_type_info()] = CREATE_EMITTER(TileEmitter);
+}
+
+// template <> struct cpu_isa_traits<avx> {
+//     typedef Xbyak::Ymm Vmm;
+//     static constexpr int vlen_shift = 5;
+//     static constexpr int vlen = 32;
+//     static constexpr int n_vregs = 16;
+// };
+
+auto get_lanes(mkldnn::impl::cpu::cpu_isa_t isa) -> size_t {
+    switch (isa) {
+        case mkldnn::impl::cpu::avx2 : return mkldnn::impl::cpu::cpu_isa_traits<mkldnn::impl::cpu::avx2>::vlen / sizeof(float);
+        case mkldnn::impl::cpu::sse42 : return mkldnn::impl::cpu::cpu_isa_traits<mkldnn::impl::cpu::sse42>::vlen / sizeof(float);
+        case mkldnn::impl::cpu::avx512_common : return mkldnn::impl::cpu::cpu_isa_traits<mkldnn::impl::cpu::avx512_common>::vlen / sizeof(float);
+        default : throw ngraph::ngraph_error(std::string("unknown isa"));
+    }
 }
 
 code CPUGenerator::generate(std::shared_ptr<ngraph::Function>& f) const {
@@ -120,44 +134,19 @@ code CPUGenerator::generate(std::shared_ptr<ngraph::Function>& f) const {
         remark(13) << "op " << qqq++ << " " << op->get_friendly_name() << " (" << op->get_type_name() << ") " << op << std::endl;
     }
 
-    generate_snippet(f);
-
-    return h->getCode();
-}
-
- void CPUGenerator::generate_snippet(std::shared_ptr<ngraph::Function>& f) const {
-    h->preamble();
-
     auto params = f->get_parameters();
     auto results = f->get_results();
 
     auto nparams = f->get_results().size() + f->get_parameters().size();
-    Xbyak::Reg64 amount = Xbyak::Reg64(reg64_tmp_start+nparams);
 
     if (nparams > 7) {
         throw ngraph_error(std::string("snippet signature should not exceed 7 arguments. got") + std::to_string(nparams));
     }
 
-    std::vector<Xbyak::Reg64> regs(nparams);
-    for (auto i = 0; i < regs.size(); i++) {
-        regs[i] = Xbyak::Reg64(reg64_tmp_start+i);
-    }
-
-    for (auto i = 0; i < params.size(); i++) {
-        h->mov(regs[i], h->ptr[param + i*sizeof(size_t)]);
-    }
-
-    for (auto i = 0; i < results.size(); i++) {
-        h->mov(regs[params.size()+i], h->ptr[param + (params.size()+i)*sizeof(size_t)]);
-    }
-
-    h->mov(amount, h->ptr[param + sizeof(size_t)*nparams]);
-
     // vector tile
     std::vector<std::pair<std::shared_ptr<Emitter>, RegInfo>> lowered;
 
     for (auto n : f->get_ordered_ops()) {
-        // reginfo.push_back(ngraph::snippet::getRegisters(n));
         if (jitters.find(n->get_type_info()) != jitters.end()) {
             lowered.push_back(std::make_pair(jitters[n->get_type_info()](n), ngraph::snippet::getRegisters(n)));
         } else {
@@ -169,7 +158,7 @@ code CPUGenerator::generate(std::shared_ptr<ngraph::Function>& f) const {
     auto f_scalar = ngraph::clone_function(*f.get());
     ngraph::pass::ReplaceLoadsWithScalarLoads().run_on_function(f_scalar);
 
-    int qqq = 0;
+    qqq = 0;
     for (auto op : f_scalar->get_ordered_ops()) {
         remark(13) << "op " << qqq++ << " " << op->get_friendly_name() << " (" << op->get_type_name() << ") " << op << std::endl;
     }
@@ -177,7 +166,6 @@ code CPUGenerator::generate(std::shared_ptr<ngraph::Function>& f) const {
     std::vector<std::pair<std::shared_ptr<Emitter>, RegInfo>> scalar_lowered;
 
     for (auto n : f_scalar->get_ordered_ops()) {
-        // scalar_reginfo.push_back(ngraph::snippet::getRegisters(n));
         if (jitters.find(n->get_type_info()) != jitters.end()) {
             scalar_lowered.push_back(make_pair(jitters[n->get_type_info()](n), ngraph::snippet::getRegisters(n)));
         } else {
@@ -185,17 +173,21 @@ code CPUGenerator::generate(std::shared_ptr<ngraph::Function>& f) const {
         }
     }
 
-    std::vector<std::shared_ptr<Emitter>> tiles;
-    tiles.push_back(std::make_shared<TileEmitter>(h.get(), isa, f, lowered));
-    tiles.push_back(std::make_shared<TileEmitter>(h.get(), isa, f_scalar, scalar_lowered));
+    std::vector<std::pair<std::shared_ptr<Emitter>, RegInfo>> tiles;
+    tiles.push_back(std::make_pair(std::make_shared<TileEmitter>(h.get(), isa, lowered),
+                    std::make_pair(std::vector<size_t>({get_lanes(isa), nparams}), std::vector<size_t>{})));
+    tiles.push_back(std::make_pair(std::make_shared<TileEmitter>(h.get(), isa, scalar_lowered),
+                    std::make_pair(std::vector<size_t>{1, nparams}, std::vector<size_t>{})));
 
-    tiles[0]->emit({mkldnn::impl::cpu::cpu_isa_traits<mkldnn::impl::cpu::avx2>::vlen / sizeof(float)}, {});
-    tiles[1]->emit({1}, {});
-
-    h->postamble();
+    //// emission
+    std::shared_ptr<Emitter> kernel = std::make_shared<KernelEmitter>(h.get(), isa, tiles);
+    kernel->emit({params.size(), results.size()}, {});
 
     lowered.insert(lowered.end(), scalar_lowered.begin(), scalar_lowered.end());
     for (auto& op : lowered) {
         op.first->emit_table();
     }
- }
+
+    return h->getCode();
+}
+
