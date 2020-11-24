@@ -9,12 +9,180 @@
 #include <ngraph/opsets/opset1.hpp>
 
 #include "ngraph_ops/load.hpp"
+#include "ngraph_ops/scalar.hpp"
 #include "ngraph_ops/broadcastload.hpp"
 
 // FIXME: use linear time register allocation algorithm
 // Assigning internal `vector` register indexes to Ops (virtual registers)
 // After this pass changing order of variables or datafrow lead to invalidation of register assignment
 bool ngraph::pass::AssignRegistersPass::run_on_function(std::shared_ptr<Function> f) {
+    // example from article
+    {
+        auto p0 = std::make_shared<opset1::Parameter>(ngraph::element::f32, Shape());
+        auto p1 = std::make_shared<opset1::Parameter>(ngraph::element::f32, Shape());
+        auto p2 = std::make_shared<opset1::Parameter>(ngraph::element::f32, Shape());
+        auto p3 = std::make_shared<opset1::Parameter>(ngraph::element::f32, Shape());
+        auto p4 = std::make_shared<opset1::Parameter>(ngraph::element::f32, Shape());
+        auto p5 = std::make_shared<opset1::Parameter>(ngraph::element::f32, Shape());
+        auto p6 = std::make_shared<opset1::Parameter>(ngraph::element::f32, Shape());
+        auto p7 = std::make_shared<opset1::Parameter>(ngraph::element::f32, Shape());
+
+        auto c0 = std::make_shared<op::Scalar>(ngraph::element::f32, Shape(), 3.14f);
+        auto c1 = std::make_shared<op::Scalar>(ngraph::element::f32, Shape(), 6.6260701e-34f);
+
+        auto y00 = std::make_shared<op::Load>(p0); y00->set_friendly_name("y00");
+        auto y01 = std::make_shared<op::Load>(p1); y01->set_friendly_name("y01");
+        auto y02 = std::make_shared<ngraph::opset1::Multiply>(y00, c0); y02->set_friendly_name("y02");
+        auto y03 = std::make_shared<ngraph::opset1::Multiply>(y01, c1); y03->set_friendly_name("y03");
+        auto y04 = std::make_shared<op::Load>(p2); y04->set_friendly_name("y04");
+        auto y05 = std::make_shared<op::Load>(p3); y05->set_friendly_name("y05");
+        auto y06 = std::make_shared<ngraph::opset1::Add>(y02, y03); y06->set_friendly_name("y06");
+        auto y07 = std::make_shared<ngraph::opset1::Multiply>(y04, c0); y07->set_friendly_name("y07");
+        auto y08 = std::make_shared<ngraph::opset1::Multiply>(y05, c1); y08->set_friendly_name("y08");
+        auto y09 = std::make_shared<op::Load>(p4); y09->set_friendly_name("y09");
+        auto y10 = std::make_shared<op::Load>(p5); y10->set_friendly_name("y10");
+        auto y11 = std::make_shared<ngraph::opset1::Add>(y07, y08); y11->set_friendly_name("y11");
+        auto y12 = std::make_shared<ngraph::opset1::Multiply>(y09, c0); y12->set_friendly_name("y12");
+        auto y13 = std::make_shared<ngraph::opset1::Multiply>(y10, c1); y13->set_friendly_name("y13");
+        auto y14 = std::make_shared<op::Load>(p6); y14->set_friendly_name("y14");
+        auto y15 = std::make_shared<ngraph::opset1::Add>(y12, y13); y15->set_friendly_name("y15");
+        auto y16 = std::make_shared<op::Load>(p7); y16->set_friendly_name("y16");
+        auto y17 = std::make_shared<ngraph::opset1::Multiply>(y14, c0); y17->set_friendly_name("y17");
+        auto y18 = std::make_shared<ngraph::opset1::Multiply>(y16, c1); y18->set_friendly_name("y18");
+        auto y19 = std::make_shared<ngraph::opset1::Add>(y06, y11); y19->set_friendly_name("y19");
+        auto y20 = std::make_shared<ngraph::opset1::Add>(y17, y18); y20->set_friendly_name("y20");
+        auto y21 = std::make_shared<ngraph::opset1::Add>(y15, y19); y21->set_friendly_name("y21");
+        auto y22 = std::make_shared<ngraph::opset1::Add>(y20, y21); y22->set_friendly_name("y22");
+
+        auto f = std::make_shared<ngraph::Function>(ngraph::NodeVector{y22}, ngraph::ParameterVector{p0, p1, p2, p3, p4, p5, p6, p7});
+
+        std::cout << std::endl << std::endl;
+
+        NodeVector stmts;
+        stmts.push_back(y00);
+        stmts.push_back(y01);
+        stmts.push_back(y02);
+        stmts.push_back(y03);
+        stmts.push_back(y04);
+        stmts.push_back(y05);
+        stmts.push_back(y06);
+        stmts.push_back(y07);
+        stmts.push_back(y08);
+        stmts.push_back(y09);
+        stmts.push_back(y10);
+        stmts.push_back(y11);
+        stmts.push_back(y12);
+        stmts.push_back(y13);
+        stmts.push_back(y14);
+        stmts.push_back(y15);
+        stmts.push_back(y16);
+        stmts.push_back(y17);
+        stmts.push_back(y18);
+        stmts.push_back(y19);
+        stmts.push_back(y20);
+        stmts.push_back(y21);
+        stmts.push_back(y22);
+
+        for (auto n : f->get_ordered_ops()) {
+            std::cout << n << std::endl;
+        }
+
+        std::cout << std::endl << std::endl;
+
+        for (auto n : stmts) {
+            std::cout << n << std::endl;
+        }
+
+        using Reg = size_t;
+
+        size_t rdx = 0;
+        std::map<std::shared_ptr<descriptor::Tensor>, Reg> regs;
+        for (auto op : stmts) {
+            for (auto output : op->outputs()) {
+                regs[output.get_tensor_ptr()] = rdx++;
+            }
+        }
+
+        std::cout << std::endl << std::endl;
+
+        for (auto r : regs) {
+            std::cout << r.first << " " << r.first->get_name() << " " << r.first->get_shape() << " " << r.second << std::endl;
+        }
+
+        std::cout << std::endl << std::endl;
+        std::vector<std::set<Reg>> used;
+        std::vector<std::set<Reg>> def;
+
+        for (auto op : stmts) {
+            std::set<Reg> u;
+            for (auto input : op->inputs()) {
+                if (regs.count(input.get_tensor_ptr())) {
+                    std::cout << op->get_friendly_name() << " " << input.get_tensor_ptr() << " " << regs[input.get_tensor_ptr()] << std::endl;
+                    u.insert(regs[input.get_tensor_ptr()]);
+                }
+            }
+            used.push_back(u);
+
+            std::set<Reg> d;
+            if (!std::dynamic_pointer_cast<op::Store>(op)) {
+                for (auto output : op->outputs()) {
+                    d.insert(regs[output.get_tensor_ptr()]);
+                }
+            }
+            def.push_back(d);
+        }
+
+        for (auto n = 0; n < stmts.size(); n++) {
+            std::cout << stmts[n]->get_friendly_name() << " " << used[n] << " " << def[n] << std::endl;
+        }
+
+        std::cout << std::endl << std::endl;
+
+        // define life intervals
+        std::vector<std::set<Reg>> lifeIn(stmts.size(), {});
+        std::vector<std::set<Reg>> lifeOut(stmts.size(), {});
+
+        for (auto n = 0; n < stmts.size(); n++) {
+            std::cout << lifeIn[n].size() << " " << lifeOut[n].size() << std::endl;
+        }
+
+        std::cout << std::endl << std::endl;
+
+
+        for (int i = 0; i < stmts.size(); i++) {
+            for (int n = 0; n < stmts.size(); n++) {
+                // std::cout << def[n] << std::endl;
+                std::set_difference(lifeOut[n].begin(), lifeOut[n].end(), def[n].begin(), def[n].end(), std::inserter(lifeIn[n], lifeIn[n].begin()));
+                lifeIn[n].insert(used[n].begin(), used[n].end());
+            }
+            for (int n = 0; n < stmts.size(); n++) {
+                auto node = stmts[n];
+                if (!std::dynamic_pointer_cast<op::Store>(node) /*|| n != stmts.size()-1*/) {
+                    for (auto out : node->outputs()) {
+                        for (auto port : out.get_target_inputs()) {
+                            auto pos = std::find(stmts.begin(), stmts.end(), port.get_node()->shared_from_this());
+                            if (pos != stmts.end()) {
+                                auto k = pos-stmts.begin();
+                                std::cout << n << " " << stmts[n] << " iter = " << k << std::endl;
+                                lifeOut[n].insert(lifeIn[k].begin(), lifeIn[k].end());
+                            }
+                        }
+                    }
+                }
+            }
+
+            std::cout << std::endl << std::endl;
+
+            for (auto n = 0; n < stmts.size(); n++) {
+                std::cout << "# " << i << " " << def[n] << " " << used[n] << " " << lifeIn[n] << " " << lifeOut[n] << std::endl;
+            }
+
+            std::cout << std::endl << std::endl;
+        }
+    }
+
+    // exit(1);
+
     {
         using Reg = size_t;
         auto ops = f->get_ordered_ops();
@@ -117,25 +285,33 @@ bool ngraph::pass::AssignRegistersPass::run_on_function(std::shared_ptr<Function
 
         for (int i = 0; i < stmts.size(); i++) {
             for (int n = 0; n < stmts.size(); n++) {
-                std::cout << def[n] << std::endl;
+                // std::cout << def[n] << std::endl;
                 std::set_difference(lifeOut[n].begin(), lifeOut[n].end(), def[n].begin(), def[n].end(), std::inserter(lifeIn[n], lifeIn[n].begin()));
                 lifeIn[n].insert(used[n].begin(), used[n].end());
-
+            }
+            for (int n = 0; n < stmts.size(); n++) {
                 auto node = stmts[n];
-                if (!std::dynamic_pointer_cast<op::Store>(node)) {
+                if (!std::dynamic_pointer_cast<op::Store>(node) /*|| n != stmts.size()-1*/) {
                     for (auto out : node->outputs()) {
                         for (auto port : out.get_target_inputs()) {
-                            auto k = std::find(stmts.begin(), stmts.end(), port.get_node()->shared_from_this())-stmts.begin();
-                            std::cout << n << " " << stmts[n] << "iter = " << k << std::endl;
-                            lifeOut[n].insert(lifeIn[k].begin(), lifeIn[k].end());
+                            auto pos = std::find(stmts.begin(), stmts.end(), port.get_node()->shared_from_this());
+                            if (pos != stmts.end()) {
+                                auto k = pos-stmts.begin();
+                                std::cout << n << " " << stmts[n] << " iter = " << k << std::endl;
+                                lifeOut[n].insert(lifeIn[k].begin(), lifeIn[k].end());
+                            }
                         }
                     }
                 }
             }
 
+            std::cout << std::endl << std::endl;
+
             for (auto n = 0; n < stmts.size(); n++) {
-                std::cout << "#1 " << def[n] << " " << used[n] << " " << lifeIn[n] << " " << lifeOut[n] << std::endl;
+                std::cout << "# " << i << " " << def[n] << " " << used[n] << " " << lifeIn[n] << " " << lifeOut[n] << std::endl;
             }
+
+            std::cout << std::endl << std::endl;
         }
     }
 
