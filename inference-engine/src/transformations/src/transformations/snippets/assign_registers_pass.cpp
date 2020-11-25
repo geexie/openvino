@@ -179,9 +179,102 @@ bool ngraph::pass::AssignRegistersPass::run_on_function(std::shared_ptr<Function
 
             std::cout << std::endl << std::endl;
         }
+
+        struct by_starting {
+            auto operator()(const std::pair<int, int>& lhs, const std::pair<int, int>& rhs) const -> bool {
+                return lhs.first < rhs.first;
+            }
+        };
+
+        struct by_ending {
+            auto operator()(const std::pair<int, int>& lhs, const std::pair<int, int>& rhs) const -> bool {
+                return lhs.second < rhs.second;
+            }
+        };
+
+        std::set<std::pair<int, int>, by_starting> live_intervals;
+
+        std::reverse(lifeIn.begin(), lifeIn.end());
+        auto find_last_use = [lifeIn](int i) -> int {
+            int ln = lifeIn.size()-1;
+            for (auto& x : lifeIn) {
+                if (x.find(i) != x.end()) {
+                    return ln;
+                }
+                ln--;
+            }
+            return i;
+        };
+
+        for (int i = 0; i < stmts.size(); i++) {
+            live_intervals.insert(std::make_pair(i, find_last_use(i)));
+        }
+
+        for (auto interval : live_intervals) {
+            std::cout << interval.first << " ---- " << interval.second << std::endl;
+        }
+
+        std::cout << std::endl << std::endl;
+
+        // http://web.cs.ucla.edu/~palsberg/course/cs132/linearscan.pdf
+        std::multiset<std::pair<int, int>, by_ending> active;
+        std::map<Reg, Reg> register_map;
+        std::stack<Reg> bank;
+        for (int i = 0; i < 16; i++) bank.push(16-1-i);
+
+        for (auto interval : live_intervals) {
+            // check expired
+            while (!active.empty()) {
+                auto x = *active.begin();
+                std::cout << active.size() << std::endl;
+                for (auto v : active) {
+                    std::cout << v.first << " ---- " << v.second << std::endl;
+                }
+                std::cout << " [";
+
+                for (std::stack<Reg> dump = bank; !dump.empty(); dump.pop()) {
+                    std::cout << dump.top() << ' ';
+                }
+
+                std::cout << "]" << std::endl;
+
+                std::cout << "checking " << x.first << " " << x.second << " " << interval.first << " " << interval.second << std::endl;
+                if (x.second >= interval.first) {
+                    break;
+                }
+                // FIXME: it would erase both
+                active.erase(x);
+                bank.push(register_map[x.first]);
+                std::cout << x.first << " " << x.second << " was been expired" << std::endl;
+                std::cout << std::endl;
+                // register_map.erase(x.first);
+            }
+            // allocate
+            if (active.size() == 16) {
+                throw ngraph_error("caanot allocate registers for a snippet ");
+            } else {
+                register_map[interval.first] = bank.top();
+                bank.pop();
+                active.insert(interval);
+            }
+
+            std::cout << interval.first << " " << active.size() << std::endl;
+        }
+
+        for (auto v : register_map) {
+            std::cout << v.first << " ---- " << v.second + 1 << " [";
+
+            for (std::stack<Reg> dump = bank; !dump.empty(); dump.pop()) {
+                std::cout << dump.top() << ' ';
+            }
+
+            std::cout << "]" << std::endl;
+        }
+
+        std::cout << std::endl << std::endl;
     }
 
-    // exit(1);
+    exit(1);
 
     {
         using Reg = size_t;
