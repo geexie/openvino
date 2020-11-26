@@ -182,13 +182,13 @@ bool ngraph::pass::AssignRegistersPass::run_on_function(std::shared_ptr<Function
 
         struct by_starting {
             auto operator()(const std::pair<int, int>& lhs, const std::pair<int, int>& rhs) const -> bool {
-                return lhs.first < rhs.first;
+                return lhs.first < rhs.first|| (lhs.first == rhs.first && lhs.second < rhs.second);
             }
         };
 
         struct by_ending {
             auto operator()(const std::pair<int, int>& lhs, const std::pair<int, int>& rhs) const -> bool {
-                return lhs.second < rhs.second;
+                return lhs.second < rhs.second || (lhs.second == rhs.second && lhs.first < rhs.first);
             }
         };
 
@@ -271,6 +271,18 @@ bool ngraph::pass::AssignRegistersPass::run_on_function(std::shared_ptr<Function
             std::cout << "]" << std::endl;
         }
 
+        std::cout << std::endl << std::endl;
+
+        //
+        std::map<std::shared_ptr<descriptor::Tensor>, Reg> physical_regs;
+
+        for (auto reg : regs) {
+            physical_regs[reg.first] = register_map[reg.second];
+        }
+
+        for (auto r : physical_regs) {
+            std::cout << r.first << " " << r.first->get_name() << " " << r.first->get_shape() << " " << r.second << std::endl;
+        }
         std::cout << std::endl << std::endl;
     }
 
