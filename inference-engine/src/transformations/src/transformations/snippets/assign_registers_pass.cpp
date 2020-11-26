@@ -17,7 +17,7 @@
 // After this pass changing order of variables or datafrow lead to invalidation of register assignment
 bool ngraph::pass::AssignRegistersPass::run_on_function(std::shared_ptr<Function> f) {
     // example from article
-    {
+    if (false) {
         auto p0 = std::make_shared<opset1::Parameter>(ngraph::element::f32, Shape());
         auto p1 = std::make_shared<opset1::Parameter>(ngraph::element::f32, Shape());
         auto p2 = std::make_shared<opset1::Parameter>(ngraph::element::f32, Shape());
@@ -284,9 +284,8 @@ bool ngraph::pass::AssignRegistersPass::run_on_function(std::shared_ptr<Function
             std::cout << r.first << " " << r.first->get_name() << " " << r.first->get_shape() << " " << r.second << std::endl;
         }
         std::cout << std::endl << std::endl;
+        // exit(1);
     }
-
-    exit(1);
 
     {
         using Reg = size_t;
@@ -348,9 +347,9 @@ bool ngraph::pass::AssignRegistersPass::run_on_function(std::shared_ptr<Function
         std::vector<std::set<Reg>> lifeIn(stmts.size(), {});
         std::vector<std::set<Reg>> lifeOut(stmts.size(), {});
 
-        for (auto n = 0; n < stmts.size(); n++) {
-            std::cout << lifeIn[n].size() << " " << lifeOut[n].size() << std::endl;
-        }
+        // for (auto n = 0; n < stmts.size(); n++) {
+        //     std::cout << lifeIn[n].size() << " " << lifeOut[n].size() << std::endl;
+        // }
 
 
         // for (auto n = 0; n < stmts.size(); n++) {
@@ -418,7 +417,114 @@ bool ngraph::pass::AssignRegistersPass::run_on_function(std::shared_ptr<Function
 
             std::cout << std::endl << std::endl;
         }
+
+        struct by_starting {
+            auto operator()(const std::pair<int, int>& lhs, const std::pair<int, int>& rhs) const -> bool {
+                return lhs.first < rhs.first|| (lhs.first == rhs.first && lhs.second < rhs.second);
+            }
+        };
+
+        struct by_ending {
+            auto operator()(const std::pair<int, int>& lhs, const std::pair<int, int>& rhs) const -> bool {
+                return lhs.second < rhs.second || (lhs.second == rhs.second && lhs.first < rhs.first);
+            }
+        };
+
+        std::set<std::pair<int, int>, by_starting> live_intervals;
+
+        std::reverse(lifeIn.begin(), lifeIn.end());
+        auto find_last_use = [lifeIn](int i) -> int {
+            int ln = lifeIn.size()-1;
+            for (auto& x : lifeIn) {
+                if (x.find(i) != x.end()) {
+                    return ln;
+                }
+                ln--;
+            }
+            return i;
+        };
+
+        for (int i = 0; i < stmts.size(); i++) {
+            live_intervals.insert(std::make_pair(i, find_last_use(i)));
+        }
+
+        for (auto interval : live_intervals) {
+            std::cout << interval.first << " ---- " << interval.second << std::endl;
+        }
+
+        std::cout << std::endl << std::endl;
+
+        // http://web.cs.ucla.edu/~palsberg/course/cs132/linearscan.pdf
+        std::multiset<std::pair<int, int>, by_ending> active;
+        std::map<Reg, Reg> register_map;
+        std::stack<Reg> bank;
+        for (int i = 0; i < 16; i++) bank.push(16-1-i);
+
+        for (auto interval : live_intervals) {
+            // check expired
+            while (!active.empty()) {
+                auto x = *active.begin();
+                std::cout << "start " << interval.first << "active.size() = " << active.size() << std::endl;
+                for (auto v : active) {
+                    std::cout << v.first << " ---- " << v.second << std::endl;
+                }
+                std::cout << "bank = [";
+
+                for (std::stack<Reg> dump = bank; !dump.empty(); dump.pop()) {
+                    std::cout << dump.top() << ' ';
+                }
+                std::cout << "]" << std::endl;
+
+                std::cout << "checking " << x.first << " ---- " << x.second << " " << interval.first << " ---- " << interval.second << std::endl;
+                if (x.second >= interval.first) {
+                    break;
+                }
+                // FIXME: it would erase both
+                active.erase(x);
+                bank.push(register_map[x.first]);
+                std::cout << x.first << " " << x.second << " was been expired" << std::endl;
+                std::cout << std::endl;
+                // register_map.erase(x.first);
+            }
+            // allocate
+            if (active.size() == 16) {
+                throw ngraph_error("caanot allocate registers for a snippet ");
+            } else {
+                register_map[interval.first] = bank.top();
+                bank.pop();
+                active.insert(interval);
+            }
+
+            std::cout << "end " << interval.first << " active.size() = " << active.size() << std::endl;
+        }
+
+        for (auto v : register_map) {
+            std::cout << v.first << " ---- " << v.second + 1 << std::endl;
+        }
+
+        std::cout << "bank = " << " [";
+
+        for (std::stack<Reg> dump = bank; !dump.empty(); dump.pop()) {
+            std::cout << dump.top() << ' ';
+        }
+
+        std::cout << "]" << std::endl;
+        std::cout << std::endl << std::endl;
+
+        //
+        std::map<std::shared_ptr<descriptor::Tensor>, Reg> physical_regs;
+
+        for (auto reg : regs) {
+            physical_regs[reg.first] = register_map[reg.second];
+        }
+
+        for (auto r : physical_regs) {
+            std::cout << r.first << " " << r.first->get_name() << " " << r.first->get_shape() << " " << r.second << std::endl;
+        }
+        std::cout << std::endl << std::endl;
     }
+
+    // exit(1);
 
     size_t idx_start = 0;
     size_t idx_max = 15; // Get this from targeet machine
