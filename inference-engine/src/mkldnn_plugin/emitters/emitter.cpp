@@ -62,9 +62,13 @@ std::set<InferenceEngine::Precision> jit_emitter::get_supported_precisions() {
     return {InferenceEngine::Precision::FP32};
 }
 
-void jit_emitter::emitter_preamble(const std::vector<size_t> &in_vec_idxs, const std::vector<size_t> &pool_vec_idxs,
+void jit_emitter::emitter_preamble(const std::vector<size_t> &in_vec_idxs, const std::vector<size_t> &out_vec_idxs, const std::vector<size_t> &pool_vec_idxs,
                                    const std::vector<size_t> &pool_gpr_idxs) const {
     using namespace Xbyak::util;
+
+    for (auto idx : in_vec_idxs) {
+        std::cout << "in idx = " << idx << std::endl;
+    }
 
     for (auto idx : pool_vec_idxs)
         aux_vec_idxs.push_back(idx);
@@ -93,6 +97,7 @@ void jit_emitter::emitter_preamble(const std::vector<size_t> &in_vec_idxs, const
         if (aux_vec_idxs.size() >= aux_vecs_count()) break;
 
         if (std::find(in_vec_idxs.begin(), in_vec_idxs.end(), idx) != in_vec_idxs.end()) continue;
+        if (std::find(out_vec_idxs.begin(), out_vec_idxs.end(), idx) != out_vec_idxs.end()) continue;
         if (std::find(aux_vec_idxs.begin(), aux_vec_idxs.end(), idx) != aux_vec_idxs.end()) continue;
         if (std::find(preserved_vec_idxs.begin(), preserved_vec_idxs.end(), idx) != preserved_vec_idxs.end()) continue;
 
@@ -100,6 +105,12 @@ void jit_emitter::emitter_preamble(const std::vector<size_t> &in_vec_idxs, const
         preserved_vec_idxs.push_back(idx);
     }
     assert(aux_vec_idxs.size() >= aux_vecs_count());
+
+    for (auto idx : aux_vec_idxs)
+        std::cout << "aux idx = " << idx << std::endl;
+
+    for (auto idx : preserved_vec_idxs)
+        std::cout << "prez idx = " << idx << std::endl;
 
     // Same logic but to allocate gprs
     for (auto idx : pool_gpr_idxs)
@@ -132,6 +143,7 @@ void jit_emitter::emitter_preamble(const std::vector<size_t> &in_vec_idxs, const
         h->sub(h->rsp, preserved_vec_idxs.size() * get_vec_length());
 
     for (size_t i = 0; i < preserved_vec_idxs.size(); ++i) {
+        std::cout << "preserving " << preserved_vec_idxs[i] << std::endl;
         push_vec(h->ptr[h->rsp + i * get_vec_length()], preserved_vec_idxs[i]);
     }
 
@@ -193,7 +205,15 @@ void jit_emitter::prepare_table() {
 
 void jit_emitter::emit(const std::vector<size_t> &in_vec_idxs, const std::vector<size_t> &out_vec_idxs,
                        const std::vector<size_t> &pool_vec_idxs, const std::vector<size_t> &pool_gpr_idxs) const {
-    emitter_preamble(in_vec_idxs, pool_vec_idxs, pool_gpr_idxs);
+    for (auto idx : in_vec_idxs) {
+        std::cout << "in idx = " << idx << std::endl;
+    }
+
+        for (auto idx : out_vec_idxs) {
+        std::cout << "out idx = " << idx << std::endl;
+    }
+
+    emitter_preamble(in_vec_idxs, out_vec_idxs, pool_vec_idxs, pool_gpr_idxs);
 
     emit_impl(in_vec_idxs, out_vec_idxs, pool_vec_idxs, pool_gpr_idxs);
 

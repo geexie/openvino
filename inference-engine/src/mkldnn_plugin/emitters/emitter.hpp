@@ -89,7 +89,7 @@ protected:
     virtual void emit_impl(const std::vector<size_t> &in_vec_idxs, const std::vector<size_t> &out_vec_idxs,
                            const std::vector<size_t> &pool_vec_idxs, const std::vector<size_t> &pool_gpr_idxs) const {}
 
-    virtual void emitter_preamble(const std::vector<size_t> &in_vec_idxs, const std::vector<size_t> &pool_vec_idxs,
+    virtual void emitter_preamble(const std::vector<size_t> &in_vec_idxs, const std::vector<size_t> &out_vec_idxs, const std::vector<size_t> &pool_vec_idxs,
                           const std::vector<size_t> &pool_gpr_idxs) const;
     virtual void emitter_postamble() const;
 

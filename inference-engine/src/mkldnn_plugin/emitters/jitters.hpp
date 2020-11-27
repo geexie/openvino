@@ -365,6 +365,7 @@ private:
     int32_t value;
 };
 
+// FIXME: still stub implementation
 class ConvertEmitter : public MKLDNNPlugin::jit_emitter {
 public:
     ConvertEmitter(mkldnn::impl::cpu::jit_generator* h, mkldnn::impl::cpu::cpu_isa_t isa, const std::shared_ptr<ngraph::Node>& n)
@@ -504,7 +505,7 @@ protected:
               const std::vector<size_t>& out,
               const std::vector<size_t>& pool = {},
               const std::vector<size_t>& gpr  = {}) const override {
-        remark(10) << "  -> erf " << offset << std::endl;
+        remark(10) << "  -> erf " << std::endl;
 
         Xbyak::Ymm x = Xbyak::Ymm(in[0]);
         Xbyak::Ymm polynom = Xbyak::Ymm(out[0]);

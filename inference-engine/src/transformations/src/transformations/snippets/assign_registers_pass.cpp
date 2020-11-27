@@ -287,7 +287,7 @@ bool ngraph::pass::AssignRegistersPass::run_on_function(std::shared_ptr<Function
         // exit(1);
     }
 
-    {
+    // {
         using Reg = size_t;
         auto ops = f->get_ordered_ops();
         decltype(ops) stmts;
@@ -299,7 +299,7 @@ bool ngraph::pass::AssignRegistersPass::run_on_function(std::shared_ptr<Function
             std::cout << op->get_friendly_name() << std::endl;
         }
 
-        std::cout << std::endl;
+        std::cout << std::endl << std::endl;
 
         for (auto op : stmts) {
             std::cout << op->get_friendly_name() << std::endl;
@@ -310,12 +310,17 @@ bool ngraph::pass::AssignRegistersPass::run_on_function(std::shared_ptr<Function
         for (auto op : stmts) {
             for (auto output : op->outputs()) {
                 regs[output.get_tensor_ptr()] = rdx++;
+                std::cout << output.get_node()->get_friendly_name() << " " << output.get_node() << " " << op << " " << op->outputs().size() <<
+                output.get_tensor_ptr() << std::endl;
             }
         }
 
+        // FIXME: something is fishy with Tensor to physical register mapping
         for (auto r : regs) {
-            std::cout << r.first << " " << r.first->get_name() << " " << r.first->get_shape() << " " << r.second << std::endl;
+            std::cout << "regs " << r.first << " " << r.first->get_name() << " " << r.first->get_shape() << " " << r.second << std::endl;
         }
+
+        std::cout << std::endl << std::endl;
 
         std::vector<std::set<Reg>> used;
         std::vector<std::set<Reg>> def;
@@ -324,7 +329,7 @@ bool ngraph::pass::AssignRegistersPass::run_on_function(std::shared_ptr<Function
             std::set<Reg> u;
             for (auto input : op->inputs()) {
                 if (regs.count(input.get_tensor_ptr())) {
-                    std::cout << op->get_friendly_name() << " " << input.get_tensor_ptr() << " " << regs[input.get_tensor_ptr()] << std::endl;
+                    // std::cout << op->get_friendly_name() << " " << input.get_tensor_ptr() << " " << regs[input.get_tensor_ptr()] << std::endl;
                     u.insert(regs[input.get_tensor_ptr()]);
                 }
             }
@@ -346,46 +351,6 @@ bool ngraph::pass::AssignRegistersPass::run_on_function(std::shared_ptr<Function
         // define life intervals
         std::vector<std::set<Reg>> lifeIn(stmts.size(), {});
         std::vector<std::set<Reg>> lifeOut(stmts.size(), {});
-
-        // for (auto n = 0; n < stmts.size(); n++) {
-        //     std::cout << lifeIn[n].size() << " " << lifeOut[n].size() << std::endl;
-        // }
-
-
-        // for (auto n = 0; n < stmts.size(); n++) {
-        //     std::cout << n << " " << lifeOut[n] << " " << lifeIn[n] << " " << def[n] << " " << used[n] << " " << stmts[n]->get_friendly_name() << std::endl;
-
-        //     // in[n] = use[n] ∪ (out[n] - def[n])
-        //     std::set<Reg> tmp, tmp2;
-        //     std::set_difference(lifeOut[n].begin(), lifeOut[n].end(), def[n].begin(), def[n].end(), std::inserter(tmp, tmp.end()));
-        //     std::set_union(used[n].begin(), used[n].end(),
-        //                tmp.begin(), tmp.end(),
-        //                std::inserter(tmp2, tmp.end()));
-        //     lifeIn[n] = tmp2;
-
-        //     // out[n] = ∪ in[s]
-        //     if (n != 0) {
-        //         for (auto k = 0; k < n-1; k++) {
-        //             lifeOut[n].insert(lifeIn[k].begin(), lifeIn[k].end());
-        //         }
-        //     }
-
-        //     std::cout << n << " " << lifeOut[n] << " " << lifeIn[n] << std::endl;
-        // }
-
-        // for (auto n = 0; n < stmts.size(); n++) {
-        //     std::cout << lifeIn[n].size() << " " << lifeOut[n].size() << std::endl;
-
-        //     for (auto x : lifeIn[n]) {
-        //         std::cout << x << " ";
-        //     }
-        //     std::cout << std::endl;
-
-        //     for (auto x : lifeOut[n]) {
-        //         std::cout << x << " ";
-        //     }
-        //     std::cout << std::endl;
-        // }
 
         for (int i = 0; i < stmts.size(); i++) {
             for (int n = 0; n < stmts.size(); n++) {
@@ -522,9 +487,11 @@ bool ngraph::pass::AssignRegistersPass::run_on_function(std::shared_ptr<Function
             std::cout << r.first << " " << r.first->get_name() << " " << r.first->get_shape() << " " << r.second << std::endl;
         }
         std::cout << std::endl << std::endl;
-    }
+    // }
 
     // exit(1);
+
+    static int qq = 0;
 
     size_t idx_start = 0;
     size_t idx_max = 15; // Get this from targeet machine
@@ -562,13 +529,18 @@ bool ngraph::pass::AssignRegistersPass::run_on_function(std::shared_ptr<Function
 
         std::vector<size_t> regs; regs.reserve(n->outputs().size());
         for (auto output : n->outputs()) {
-            if (idx_start > idx_max) {
-                idx_start = 0;
-                // FIXME: implement somewhat notmal register allocation logic
-                throw ngraph::ngraph_error(std::string("cannot allocate register for ") + n->get_friendly_name());
+            if (true || qq < 13) {
+                auto allocated = physical_regs[output.get_tensor_ptr()];
+                regs.push_back(allocated);
+            } else {
+                if (idx_start > idx_max) {
+                    idx_start = 0;
+                    // FIXME: implement somewhat notmal register allocation logic
+                    // throw ngraph::ngraph_error(std::string("cannot allocate register for ") + n->get_friendly_name());
+                }
+                regs.push_back(idx_start);
+                idx_start++;
             }
-            regs.push_back(idx_start);
-            idx_start++;
         }
 
         remark(12) << "allocating registers to " << n->get_friendly_name() << " (" << n->get_type_info().name << ") ";
@@ -578,6 +550,10 @@ bool ngraph::pass::AssignRegistersPass::run_on_function(std::shared_ptr<Function
         std::cout << std::endl;
         rt["reginfo"] = std::make_shared<VariantWrapper<std::vector<size_t>>>(VariantWrapper<std::vector<size_t>>(regs));
     }
+
+    // if (qq == 12) exit(1);
+    std::cout << qq << std::endl;
+    qq++;
 
     return false;
 }
