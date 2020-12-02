@@ -79,10 +79,11 @@ bool op::FakeBroadcast::evaluate(const HostTensorVector& output_values, const Ho
         }
     }
 
-    runtime::reference::broadcast<float>((input_values[0]->get_data_ptr<float>()),
-                                     (output_values[0]->get_data_ptr<float>()),
-                                     input_values[0]->get_shape(),
-                                     output_values[0]->get_shape(),
-                                     broadcast_axes);
+    runtime::reference::broadcast(input_values[0]->get_data_ptr<char>(),
+                                  output_values[0]->get_data_ptr<char>(),
+                                  input_values[0]->get_shape(),
+                                  output_values[0]->get_shape(),
+                                  broadcast_axes,
+                                  sizeof(float));
     return true;
 }

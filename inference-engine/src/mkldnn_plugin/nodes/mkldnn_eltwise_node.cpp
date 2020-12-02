@@ -348,7 +348,7 @@ private:
             case Relu: case Gelu: case Elu: case Tanh: case Logistic: case Square: case Abs: case Sqrt:
             case Linear: case BoundedRelu: case SoftRelu: case Relu6: case Exp: case Clamp: case Swish: case Hswish:
             case Mish: case Hsigmoid: case Round:
-                                    return std::make_shared<jit_mkldnn_emitter>(this, isa, eltwiseNode, exec_prec);
+                                    return std::make_shared<jit_mkldnn_aux_emitter>(this, isa, eltwiseNode, exec_prec);
             case Add:               return std::make_shared<jit_add_emitter>(this, isa, eltwiseNode, exec_prec);
             case MulAdd:            return std::make_shared<jit_mul_add_emitter>(this, isa, eltwiseNode, exec_prec);
             case Subtract:          return std::make_shared<jit_subtract_emitter>(this, isa, eltwiseNode, exec_prec);

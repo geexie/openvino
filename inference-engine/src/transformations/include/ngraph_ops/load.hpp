@@ -20,8 +20,8 @@ public:
     static constexpr NodeTypeInfo type_info{"BlockedParameter", 0};
     const NodeTypeInfo& get_type_info() const override { return type_info; }
     BlockedParameter() = default;
-    BlockedParameter(const ngraph::element::Type& element_type, const PartialShape& pshape, const bool cacheable = false)
-        : Parameter(element_type, pshape, cacheable) {
+    BlockedParameter(const ngraph::element::Type& element_type, const PartialShape& pshape)
+        : Parameter(element_type, pshape) {
     }
 
     std::shared_ptr<Node> clone_with_new_inputs(const OutputVector& new_args) const override {
