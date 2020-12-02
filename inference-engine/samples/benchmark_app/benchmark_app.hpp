@@ -103,6 +103,14 @@ static const char shape_message[] = "Optional. Set shape for input. For example,
 // @brief message for quantization bits
 static const char gna_qb_message[] = "Optional. Weight bits for quantization:  8 or 16 (default)";
 
+// @brief message for quantization bits
+static const char regression_message[] = "Optional. Define flag for regression testing. `none` means default performance only, "
+                                         "`dump` means store regression data, `check` means compare current results with the results "
+                                         "previously stored at `regression_path`";
+
+// @brief message for quantization bits
+static const char regression_path_message[] = "Optional. path to store or compare with regression data";
+
 /// @brief Define flag for showing help message <br>
 DEFINE_bool(h, false, help_message);
 
@@ -190,6 +198,15 @@ DEFINE_string(shape, "", shape_message);
 /// @brief Define flag for quantization bits (default 16)
 DEFINE_int32(qb, 16, gna_qb_message);
 
+/// @brief Define flag for regression testing.
+/// `none` means default performance only,
+/// `dump` means store regression data,
+/// `check` means compare current results with the results previously stored at `regression_path` <br>
+DEFINE_string(regression, "none", regression_message);
+
+/// @brief path to store or compare with regression data.
+DEFINE_string(regression_path, "", regression_path_message);
+
 /**
 * @brief This function show a help message
 */
@@ -228,4 +245,7 @@ static void showUsage() {
     std::cout << "    -load_config              " << load_config_message << std::endl;
 #endif
     std::cout << "    -qb                       " << gna_qb_message << std::endl;
+
+    std::cout << "    -regression               " << regression_message << std::endl;
+    std::cout << "    -regression_path          " << regression_path_message << std::endl;
 }

@@ -9,6 +9,7 @@
 #include <string>
 #include <vector>
 #include <utility>
+#include <filesystem>
 
 #include <inference_engine.hpp>
 #include <vpu/vpu_plugin_config.hpp>
@@ -318,6 +319,7 @@ int main(int argc, char *argv[]) {
         size_t batchSize = FLAGS_b;
         Precision precision = Precision::UNSPECIFIED;
         std::string topology_name = "";
+        CNNNetwork cnnNetwork;
         if (!isNetworkCompiled) {
             // ----------------- 4. Reading the Intermediate Representation network ----------------------------------------
             next_step();
@@ -325,7 +327,7 @@ int main(int argc, char *argv[]) {
             slog::info << "Loading network files" << slog::endl;
 
             auto startTime = Time::now();
-            CNNNetwork cnnNetwork = ie.ReadNetwork(FLAGS_m);
+            cnnNetwork = ie.ReadNetwork(FLAGS_m);
             auto duration_ms = double_to_string(get_total_ms_time(startTime));
             slog::info << "Read network took " << duration_ms << " ms" << slog::endl;
             if (statistics)
@@ -614,6 +616,49 @@ int main(int argc, char *argv[]) {
         }
 
         progressBar.finish();
+
+        if (!isNetworkCompiled && FLAGS_regression != "none") {
+            /*slog::info*/std::cout << "Doing regression testing for an output blobs" << /*slog::endl*/std::endl;
+            OutputsDataMap outputInfo(cnnNetwork.getOutputsInfo());
+            std::cout << "outputInfo.size() = " << outputInfo.size() << std::endl;
+
+            for (auto& info : outputInfo) {
+                Blob::Ptr outputBlob = inferRequest->getBlob(info.first);
+                std::cout << info.first << " " << cnnNetwork.getName() << std::endl;
+
+                if (FLAGS_regression == "check") {
+                    std::cout << "running regression in check mode to compare against " << FLAGS_regression_path << std::endl;
+                    // eg. /Users/mkolpako/bench-08-01-2020/attrs/regression/ref
+
+                    // auto dit = std::__fs::filesystem::directory_iterator(FLAGS_regression_path);
+                    std::__fs::filesystem::directory_entry ref_file;
+                    for (const auto & entry : std::__fs::filesystem::directory_iterator(FLAGS_regression_path)) {
+                        std::cout << entry.path() << std::endl;
+
+                        if (entry.path().filename().string().find(info.first) != std::string::npos) {
+                            std::cout << "found " << info.first << " in " << entry.path() << std::endl;
+                            ref_file = entry;
+                        }
+                    }
+
+                    if (!ref_file.exists()) {
+                        std::cout << "ERROR: cannon check regression" << std::endl;
+                    }
+
+                    // bmk::BlobDumper refDumper = bmk::BlobDumper::read(ref_file.path().filename().string());
+                }
+
+
+                size_t resultsCnt = outputBlob->size() / batchSize;
+                std::cout << outputBlob->getTensorDesc().getDims()[0] << " " << resultsCnt << std::endl;
+
+                for (int k = 0; k < std::min((size_t)10, resultsCnt); k++) {
+                    std::cout << outputBlob->cbuffer().as<float*>()[k] << " ";
+                }
+
+                std::cout << std::endl<< std::endl;
+            }
+        }
 
         // ----------------- 11. Dumping statistics report -------------------------------------------------------------
         next_step();
