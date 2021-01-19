@@ -200,3 +200,5 @@ bool op::LEA::evaluate(const HostTensorVector& output_values, const HostTensorVe
 
     return true;
 }
+
+constexpr NodeTypeInfo op::PowerStatic::type_info;

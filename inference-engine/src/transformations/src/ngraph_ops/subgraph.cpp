@@ -161,6 +161,22 @@ void op::Subgraph::canonicalize(const BlockedShapeVector& output_shapes, const B
         }
     }
 
+    // repalace power with power static
+    for (auto op : m_body->get_ordered_ops()) {
+        if (auto power = ngraph::as_type_ptr<opset1::Power>(op)) {
+            std::cout << power << std::endl;
+            if (ngraph::as_type_ptr<op::Scalar>(power->input(1).get_node()->shared_from_this())) {
+                std::cout << power << " is to be replaced with static variant" << std::endl;
+                auto power_static = std::make_shared<op::PowerStatic>(
+                    power->input(0).get_source_output(), power->input(1).get_source_output(), power->get_autob());
+                power_static->set_friendly_name(power->get_friendly_name());
+                ngraph::copy_runtime_info(power, power_static);
+                ngraph::replace_node(power, power_static);
+            }
+        }
+    }
+
+
     // it should be in subgraph node to be aligned with internal and external parameter list, but adding this for testing
     // FIXME: store blocking into to Parameter's rt_info for future propagation
     for (size_t i = 0; i < m_body->get_parameters().size(); i++) {

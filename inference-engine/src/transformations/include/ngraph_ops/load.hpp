@@ -8,6 +8,7 @@
 
 #include <ngraph/op/op.hpp>
 #include <ngraph/op/parameter.hpp>
+#include <ngraph/op/power.hpp>
 
 namespace ngraph {
 namespace op {
@@ -166,6 +167,26 @@ public:
     void validate_and_infer_types() override;
     bool evaluate(const HostTensorVector& output_values, const HostTensorVector& input_values) const override;
 private:
+};
+
+class TRANSFORMATIONS_API PowerStatic : public op::v1::Power {
+public:
+    static constexpr NodeTypeInfo type_info{"PowerStatic", 1};
+    const NodeTypeInfo& get_type_info() const override { return type_info; }
+    PowerStatic() : Power() {
+    }
+
+    // ToDo check if second operand is constant
+    PowerStatic(const Output<Node>& arg0,
+            const Output<Node>& arg1,
+            const AutoBroadcastSpec& auto_broadcast =
+                AutoBroadcastSpec(AutoBroadcastType::NUMPY)) : Power(arg0, arg1, auto_broadcast) {
+    }
+
+    std::shared_ptr<Node> clone_with_new_inputs(const OutputVector& new_args) const override {
+        check_new_args_count(this, new_args);
+        return std::make_shared<PowerStatic>(new_args.at(0), new_args.at(1), this->get_autob());
+    }
 };
 
 } // namespace op

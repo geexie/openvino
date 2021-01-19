@@ -67,7 +67,8 @@ CPUGenerator::CPUGenerator() : h(new jit_snippet()), isa(mkldnn::impl::cpu::avx2
     jitters[ngraph::opset1::Mod().get_type_info()] = CREATE_EMITTER(MKLDNNPlugin::jit_mod_emitter);
     jitters[ngraph::opset1::Multiply().get_type_info()] = CREATE_EMITTER(MKLDNNPlugin::jit_multiply_emitter);
     jitters[ngraph::opset1::NotEqual().get_type_info()] = CREATE_EMITTER(MKLDNNPlugin::jit_not_equal_emitter);
-    jitters[ngraph::opset1::Power().get_type_info()] = CREATE_EMITTER(MKLDNNPlugin::jit_power_static_emitter);
+    jitters[ngraph::op::PowerStatic().get_type_info()] = CREATE_EMITTER(MKLDNNPlugin::jit_power_static_emitter);
+    jitters[ngraph::opset1::Power().get_type_info()] = CREATE_EMITTER(MKLDNNPlugin::jit_power_dynamic_emitter);
     jitters[ngraph::opset1::PRelu().get_type_info()] = CREATE_EMITTER(MKLDNNPlugin::jit_prelu_emitter);
     jitters[ngraph::opset1::SquaredDifference().get_type_info()] = CREATE_EMITTER(MKLDNNPlugin::jit_squared_difference_emitter);
     jitters[ngraph::opset1::Subtract().get_type_info()] = CREATE_EMITTER(MKLDNNPlugin::jit_subtract_emitter);
