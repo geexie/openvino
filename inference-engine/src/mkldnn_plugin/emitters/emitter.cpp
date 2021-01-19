@@ -66,9 +66,9 @@ void jit_emitter::emitter_preamble(const std::vector<size_t> &in_vec_idxs, const
                                    const std::vector<size_t> &pool_gpr_idxs) const {
     using namespace Xbyak::util;
 
-    for (auto idx : in_vec_idxs) {
-        std::cout << "in idx = " << idx << std::endl;
-    }
+    // for (auto idx : in_vec_idxs) {
+    //     std::cout << "in idx = " << idx << std::endl;
+    // }
 
     for (auto idx : pool_vec_idxs)
         aux_vec_idxs.push_back(idx);
@@ -106,11 +106,11 @@ void jit_emitter::emitter_preamble(const std::vector<size_t> &in_vec_idxs, const
     }
     assert(aux_vec_idxs.size() >= aux_vecs_count());
 
-    for (auto idx : aux_vec_idxs)
-        std::cout << "aux idx = " << idx << std::endl;
+    // for (auto idx : aux_vec_idxs)
+    //     std::cout << "aux idx = " << idx << std::endl;
 
-    for (auto idx : preserved_vec_idxs)
-        std::cout << "prez idx = " << idx << std::endl;
+    // for (auto idx : preserved_vec_idxs)
+    //     std::cout << "prez idx = " << idx << std::endl;
 
     // Same logic but to allocate gprs
     for (auto idx : pool_gpr_idxs)
@@ -205,13 +205,13 @@ void jit_emitter::prepare_table() {
 
 void jit_emitter::emit(const std::vector<size_t> &in_vec_idxs, const std::vector<size_t> &out_vec_idxs,
                        const std::vector<size_t> &pool_vec_idxs, const std::vector<size_t> &pool_gpr_idxs) const {
-    for (auto idx : in_vec_idxs) {
-        std::cout << "in idx = " << idx << std::endl;
-    }
+    // for (auto idx : in_vec_idxs) {
+    //     std::cout << "in idx = " << idx << std::endl;
+    // }
 
-        for (auto idx : out_vec_idxs) {
-        std::cout << "out idx = " << idx << std::endl;
-    }
+    //     for (auto idx : out_vec_idxs) {
+    //     std::cout << "out idx = " << idx << std::endl;
+    // }
 
     emitter_preamble(in_vec_idxs, out_vec_idxs, pool_vec_idxs, pool_gpr_idxs);
 

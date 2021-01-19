@@ -64,8 +64,8 @@
 #include <transformations/convert_precision.hpp>
 #include <transformations/init_node_info.hpp>
 #include <transformations/rt_info/fused_names_attribute.hpp>
-
 #include <transformations/collapse_subgraph.hpp>
+
 #include <ngraph/opsets/opset2.hpp>
 #include <ngraph/opsets/opset3.hpp>
 #include <ngraph/opsets/opset4.hpp>
@@ -79,15 +79,6 @@
 # include <low_precision/group_convolution.hpp>
 # include <low_precision/multiply_to_group_convolution.hpp>
 
-// #if !defined(__arm__) && !defined(_M_ARM) && !defined(__aarch64__) && !defined(_M_ARM64)
-// #if defined(_WIN32) || defined(WIN32)
-// #include <intrin.h>
-// #include <windows.h>
-// #else
-// #include <cpuid.h>
-
-// #endif
-// #endif
 // WA for xbyak.h
 #ifdef _WIN32
 # ifndef _WINSOCKAPI_
@@ -223,7 +214,7 @@ static void Transformation(ICNNNetwork::Ptr& clonedNetwork, const Config& conf) 
     }
 
     // List of enabled/disabled transformations
-    if (tokenizeSubgraphs == Config::TokenizationMode::Disabled) {
+    // if (tokenizeSubgraphs == Config::TokenizationMode::Disabled) {
         pass_config->disable<ngraph::pass::ConvertGELU>();
         pass_config->disable<ngraph::pass::HSwishDecomposition>();
         pass_config->disable<ngraph::pass::ReduceL1Decomposition>();
@@ -232,7 +223,7 @@ static void Transformation(ICNNNetwork::Ptr& clonedNetwork, const Config& conf) 
         pass_config->disable<ngraph::pass::HSigmoidDecomposition>();
         pass_config->disable<ngraph::pass::ConvertMod>();
         pass_config->disable<ngraph::pass::LogSoftmaxDecomposition>();
-    } else {
+    // } else {
         // pass_config->disable<ngraph::pass::MishFusion>();
         // pass_config->disable<ngraph::pass::SoftPlusFusion>();
         // pass_config->disable<ngraph::pass::SoftPlusToMishFusion>();
@@ -244,8 +235,9 @@ static void Transformation(ICNNNetwork::Ptr& clonedNetwork, const Config& conf) 
         // pass_config->disable<ngraph::pass::GroupConvolutionMultiplyFusion>();
         // pass_config->disable<ngraph::pass::ConvolutionBackpropDataMultiplyFusion>();
         // pass_config->disable<ngraph::pass::GroupConvolutionBackpropDataMultiplyFusion>();
-    }
+    // }
     pass_config->disable<ngraph::pass::ConvertInterpolateToInterpOrResampleMatcher>();
+
     pass_config->enable<ngraph::pass::ConvertInterpolate1ToInterpolate4>();
 
     manager.run_passes(nGraphFunc);

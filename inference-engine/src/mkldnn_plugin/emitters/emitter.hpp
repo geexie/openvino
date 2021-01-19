@@ -108,7 +108,7 @@ protected:
 
     Xbyak::Address table_val(std::string key, size_t key_off_val_shift = 0) const {
         auto off = table_off(key, key_off_val_shift);
-        std::cout << "table_val " << off << std::endl;
+        // std::cout << "table_val " << off << std::endl;
         return h->ptr[p_table + off];
     }
 
