@@ -95,8 +95,7 @@ static inline auto is_scalar_constant(const std::shared_ptr<ngraph::Node>& sourc
 
 static inline auto create_body(std::string name, const ngraph::ResultVector& results, const ngraph::ParameterVector& parameters) ->
     std::shared_ptr<ngraph::Function> {
-    auto body = std::make_shared<ngraph::Function>(results, parameters);
-    body->set_friendly_name(name);
+    auto body = std::make_shared<ngraph::Function>(results, parameters, name);
     return body;
 };
 

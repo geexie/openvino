@@ -145,8 +145,14 @@ ngraph::pass::CollapseSubgraph::CollapseSubgraph(bool tokenize_by_node) : GraphR
 
         auto get_input_index = [](const Output<Node>& found) -> size_t {
             for (auto& input : found.get_target_inputs()) {
-                remark(3) << input.get_source_output() << " vs " << found << " : " << input.get_index() << " " << found.get_index() << std::endl;
-                if (input.get_source_output() == found) {
+                remark(3) << input.get_node() << " " << input.get_source_output() << " vs "
+                    << found << found.get_node() << " : " << input.get_index() << " " << found.get_index() << std::endl;
+            }
+
+            for (auto& input : found.get_target_inputs()) {
+                remark(3) << input.get_node() << " " << input.get_source_output() << " vs "
+                    << found << " : " << input.get_index() << " " << found.get_index() << std::endl;
+                if (as_type_ptr<ngraph::op::Subgraph>(input.get_node()->shared_from_this()) != nullptr && input.get_source_output() == found) {
                     return input.get_index();
                 }
             }
@@ -164,6 +170,10 @@ ngraph::pass::CollapseSubgraph::CollapseSubgraph(bool tokenize_by_node) : GraphR
                 }
             }
         }
+
+        // for (auto clone : clones) {
+        //     std::cout << clone.first << " " << clone.second << std::endl;
+        // }
 
         for (auto input : inputs) {
             auto input_node = input.get_source_output().get_node_shared_ptr();
@@ -228,13 +238,17 @@ ngraph::pass::CollapseSubgraph::CollapseSubgraph(bool tokenize_by_node) : GraphR
                 } else {
                     external_inputs.push_back(input.get_source_output());
                     auto new_parameter = std::make_shared<opset1::Parameter>(input.get_element_type(), input.get_partial_shape());
+                    new_parameter->set_friendly_name(input.get_source_output().get_node()->get_friendly_name());
                     body_parameters.push_back(new_parameter);
+                    body_parameters.back()->set_friendly_name(input.get_source_output().get_node()->get_friendly_name());
                     internal_inputs.push_back(new_parameter->output(0));
                 }
             }
         }
 
         auto body_node = node->copy_with_new_inputs(internal_inputs);
+        body_node->set_friendly_name(node->get_friendly_name());
+
         remark(3) << "Original node outputs = " << node->get_output_size()
                     << " body node outputs = " << body_node->get_output_size() << std::endl;
 
@@ -294,7 +308,14 @@ ngraph::pass::CollapseSubgraph::CollapseSubgraph(bool tokenize_by_node) : GraphR
         }
 
         auto body = op::create_body(node->get_friendly_name(), body_results, body_parameters);
+        for (size_t i = 0; i < body->get_parameters().size(); i++) {
+            body->get_parameters()[i]->set_friendly_name(body_parameters[i]->get_friendly_name());
+        }
         auto subgraph = op::build_subgraph(node, external_inputs, body);
+        auto act_body = subgraph->get_body();
+        for (size_t i = 0; i < act_body->get_parameters().size(); i++) {
+            act_body->get_parameters()[i]->set_friendly_name(body_parameters[i]->get_friendly_name());
+        }
 
         if (subgraph->get_output_size() != subgraph_result_inputs.size()) {
             throw ngraph_error("newly create subgraph doesn't much number of results");
@@ -323,7 +344,13 @@ ngraph::pass::CollapseSubgraph::CollapseSubgraph(bool tokenize_by_node) : GraphR
                 target_input.replace_source_output(subgraph->output(i));
             }
         }
+
         subgraph->validate_and_infer_types();
+
+        auto act_body1 = subgraph->get_body();
+        for (size_t i = 0; i < act_body1->get_parameters().size(); i++) {
+            act_body1->get_parameters()[i]->set_friendly_name(body_parameters[i]->get_friendly_name());
+        }
 
         remark(3) << "Replacement (merge) done for: "
                     << subgraph->get_friendly_name()
@@ -444,8 +471,8 @@ ngraph::pass::CollapseSubgraph::CollapseSubgraph(bool tokenize_by_node) : GraphR
                   << subgraph->get_friendly_name()
                   << " with " << subgraph->inputs().size()
                   << " inputs and " << subgraph->outputs().size()
-                  << " outputs" << "\n";
-
+                  << " outputs and " << subgraph->get_body()->get_ops().size() << " ops total\n";
+        // subgraph->print();
         return true;
     }, PassProperty::CHANGE_DYNAMIC_STATE);
 

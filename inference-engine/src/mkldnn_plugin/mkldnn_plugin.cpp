@@ -65,6 +65,7 @@
 #include <transformations/init_node_info.hpp>
 #include <transformations/rt_info/fused_names_attribute.hpp>
 #include <transformations/collapse_subgraph.hpp>
+#include <ngraph_ops/subgraph.hpp>
 
 #include <ngraph/opsets/opset2.hpp>
 #include <ngraph/opsets/opset3.hpp>
@@ -92,6 +93,8 @@
 
 using namespace MKLDNNPlugin;
 using namespace InferenceEngine;
+
+// #define DUMP_TOKENIZATION
 
 Engine::Engine() {
     _pluginName = "CPU";
@@ -269,10 +272,34 @@ static void Transformation(ICNNNetwork::Ptr& clonedNetwork, const Config& conf) 
     }
 
     if (tokenizeSubgraphs != Config::TokenizationMode::Disabled) {
+#if defined (DUMP_TOKENIZATION)
         std::cout << "Tokenization is ON" << std::endl;
+        for (auto op : nGraphFunc->get_ordered_ops()) {
+            std::cout << op << std::endl;
+            if (auto constant = ngraph::as_type_ptr<ngraph::opset1::Constant>(op)) {
+                std::cout << "constant value " << reinterpret_cast<const float*>(constant->get_data_ptr())[0] << std::endl;
+            }
+        }
+        ngraph::pass::VisualizeTree("original.svg").run_on_function(nGraphFunc);
+        std::cout << std::endl << std::endl;
+#endif
         ngraph::pass::Manager tokenization_manager;
         tokenization_manager.register_pass<ngraph::pass::CollapseSubgraph>(conf.tokenizationMode == Config::TokenizationMode::Node);
         tokenization_manager.run_passes(nGraphFunc);
+#if defined (DUMP_TOKENIZATION)
+        for (auto op : nGraphFunc->get_ordered_ops()) {
+            std::cout << op << std::endl;
+        }
+        ngraph::pass::VisualizeTree("tokenized.svg").run_on_function(nGraphFunc);
+
+        int subgraph_index = 0;
+        for (auto op : nGraphFunc->get_ordered_ops()) {
+            std::cout << op << std::endl;
+            if (auto subgraph = ngraph::as_type_ptr<ngraph::op::Subgraph>(op)) {
+                ngraph::pass::VisualizeTree(std::string("subgraph")+std::to_string(subgraph_index++)+".svg").run_on_function(subgraph->get_body());
+            }
+        }
+#endif
     }
 
     ngraph::pass::Manager legacyManager;

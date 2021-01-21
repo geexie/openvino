@@ -48,12 +48,21 @@ std::shared_ptr<Node> op::Subgraph::clone_with_new_inputs(const OutputVector& in
 }
 
 void op::Subgraph::validate_and_infer_types() {
+    ngraph::ParameterVector old_parameters;
+    for (auto op : m_body->get_parameters()) {
+        old_parameters.push_back(op);
+    }
+
     // FIXME: Check if shape/type is changed before replacement?
     for (size_t i = 0; i < get_input_size(); ++i) {
         m_body->replace_parameter(i, std::make_shared<Parameter>(get_input_element_type(i), get_input_partial_shape(i)));
     }
 
     m_body->validate_nodes_and_infer_types();
+
+    for (size_t i = 0; i < m_body->get_parameters().size(); i++) {
+        m_body->get_parameters()[i]->set_friendly_name(old_parameters[i]->get_friendly_name());
+    }
 
     set_output_size(m_body->get_output_size());
     for (size_t i = 0; i < get_output_size(); ++i) {
@@ -80,6 +89,7 @@ auto op::Subgraph::wrap_node_as_subgraph(const std::shared_ptr<ngraph::Node>& no
         } else {
             auto parameter = std::make_shared<ngraph::opset1::Parameter>(input.get_element_type(), input.get_partial_shape());
             body_parameters.push_back(parameter);
+            body_parameters.back()->set_friendly_name(source_output.get_node()->get_friendly_name());
             body_inputs.push_back(parameter->output(0));
 
             subgraph_inputs.push_back(source_output);
@@ -87,6 +97,7 @@ auto op::Subgraph::wrap_node_as_subgraph(const std::shared_ptr<ngraph::Node>& no
     }
 
     auto body_node = node->copy_with_new_inputs(body_inputs);
+    body_node->set_friendly_name(node->get_friendly_name());
 
     if (node->get_output_size() != body_node->get_output_size()) {
         throw ngraph::ngraph_error("original node outputs size and extracted subgraph node outputs size doesn't much");
@@ -99,6 +110,10 @@ auto op::Subgraph::wrap_node_as_subgraph(const std::shared_ptr<ngraph::Node>& no
 
     auto body = create_body(node->get_friendly_name(), body_results, body_parameters);
     auto subgraph = build_subgraph(node, subgraph_inputs, body);
+
+    for (size_t i = 0; i < body->get_parameters().size(); i++) {
+        body->get_parameters()[i]->set_friendly_name(body_parameters[i]->get_friendly_name());
+    }
 
     if (subgraph->get_output_size() != body->get_results().size()) {
         throw ngraph::ngraph_error("newly create subgraph doesn't much number of original node results");
