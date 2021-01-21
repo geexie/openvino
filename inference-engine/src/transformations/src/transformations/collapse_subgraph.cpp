@@ -16,6 +16,7 @@
 #include <ngraph/opsets/opset1.hpp>
 #include <ngraph/rt_info.hpp>
 #include <ngraph/pass/visualize_tree.hpp>
+#include <ngraph/op/loop.hpp>
 
 /// ====================================================================================================================================================
 /// This pass tokenizes topology graph into subgraphs.
@@ -451,6 +452,12 @@ ngraph::pass::CollapseSubgraph::CollapseSubgraph(bool tokenize_by_node) : GraphR
                 if (out.get_tensor().get_element_type() != ngraph::element::f32) {
                     return false;
                 }
+
+                for (auto in_out : out.get_target_inputs()) {
+                    if (!!as_type_ptr<ngraph::op::v5::Loop>(in_out.get_node()->shared_from_this())) {
+                        return false;
+                    }
+                }
             }
 
             return is_lo(n) && (tokenize_by_node || !hasSomeSubgraphInput(n));
@@ -488,6 +495,12 @@ ngraph::pass::CollapseSubgraph::CollapseSubgraph(bool tokenize_by_node) : GraphR
             for (auto out : n->outputs()) {
                 if (out.get_tensor().get_element_type() != ngraph::element::f32) {
                     return false;
+                }
+
+                for (auto in_out : out.get_target_inputs()) {
+                    if (!!as_type_ptr<ngraph::op::v5::Loop>(in_out.get_node()->shared_from_this())) {
+                        return false;
+                    }
                 }
             }
         return is_lo(n) && hasSomeSubgraphInput(n);
