@@ -1523,4 +1523,34 @@ size_t jit_prelu_emitter::aux_vecs_count() const {
     return 2;
 }
 
+/// SQRT ///
+jit_sqrt_emitter::jit_sqrt_emitter(jit_generator *host, cpu_isa_t host_isa, const std::shared_ptr<ngraph::Node>& node, Precision exec_prc)
+: jit_emitter(host, host_isa, node, exec_prc) {}
+jit_sqrt_emitter::jit_sqrt_emitter(jit_generator *host, cpu_isa_t host_isa, const MKLDNNNode& node, Precision exec_prc)
+: jit_emitter(host, host_isa, node, exec_prc) {}
+
+size_t jit_sqrt_emitter::get_inputs_num() { return 1; }
+
+void jit_sqrt_emitter::emit_impl(const std::vector<size_t> &in_vec_idxs, const std::vector<size_t> &out_vec_idxs,
+                                const std::vector<size_t> &pool_vec_idxs, const std::vector<size_t> &pool_gpr_idxs) const {
+    if (host_isa_ == cpu::sse42) {
+        emit_isa<cpu::sse42>(in_vec_idxs, out_vec_idxs);
+    } else if (host_isa_ == cpu::avx2) {
+        emit_isa<cpu::avx2>(in_vec_idxs, out_vec_idxs);
+    } else if (host_isa_ == cpu::avx512_common) {
+        emit_isa<cpu::avx512_common>(in_vec_idxs, out_vec_idxs);
+    } else {
+        assert(!"unsupported isa");
+    }
+}
+
+template <mkldnn::impl::cpu::cpu_isa_t isa>
+void jit_sqrt_emitter::emit_isa(const std::vector<size_t> &in_vec_idxs, const std::vector<size_t> &out_vec_idxs) const {
+    using Vmm = typename conditional3<isa == cpu::sse42, Xmm, isa == cpu::avx2, Ymm, Zmm>::type;
+    Vmm vmm_src0 = Vmm(in_vec_idxs[0]);
+    Vmm vmm_dst = Vmm(out_vec_idxs[0]);
+
+     h->uni_vsqrtps(vmm_dst, vmm_src0);
+}
+
 } // namespace MKLDNNPlugin
