@@ -143,7 +143,7 @@ void jit_emitter::emitter_preamble(const std::vector<size_t> &in_vec_idxs, const
         h->sub(h->rsp, preserved_vec_idxs.size() * get_vec_length());
 
     for (size_t i = 0; i < preserved_vec_idxs.size(); ++i) {
-        std::cout << "preserving " << preserved_vec_idxs[i] << std::endl;
+        // std::cout << "preserving " << preserved_vec_idxs[i] << std::endl;
         push_vec(h->ptr[h->rsp + i * get_vec_length()], preserved_vec_idxs[i]);
     }
 
@@ -198,7 +198,7 @@ void jit_emitter::prepare_table() {
     for (auto it = entry_map_.begin(); it != entry_map_.end(); it++) {
         auto &te = (*it).second;
         te.off = off;
-        std::cout << te.off << std::endl;
+        // std::cout << te.off << std::endl;
         off += te.bcast ? get_vec_length() : sizeof(table_entry_val_t);
     }
 }
