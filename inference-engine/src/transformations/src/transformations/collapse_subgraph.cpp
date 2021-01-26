@@ -119,7 +119,14 @@ auto has_cycles_of_dependencies(const std::vector<std::set<ngraph::Input<ngraph:
 }
 
 ngraph::pass::CollapseSubgraph::CollapseSubgraph(bool tokenize_by_node) : GraphRewrite() {
-    ngraph::graph_rewrite_callback continuation_callback = [](ngraph::pattern::Matcher &m) -> bool {
+    enum continuation_strategy {
+        reset,
+        abort
+    };
+
+    continuation_strategy strategy = continuation_strategy::abort;
+
+    ngraph::graph_rewrite_callback continuation_callback = [strategy](ngraph::pattern::Matcher &m) -> bool {
         auto node = m.get_match_root();
 
         remark(3) << "Match root " << node->get_friendly_name() << " " << node << std::endl;
@@ -300,12 +307,16 @@ ngraph::pass::CollapseSubgraph::CollapseSubgraph(bool tokenize_by_node) : GraphR
         }
 
         if (body_parameters.size() + body_results.size() > 7) {
-            remark(3) << "new subgraph is created. Impossible to schedule subgraph with "
-                      << body_parameters.size() << " inputs and " << body_results.size() << " outputs." << std::endl;
+            if (strategy == continuation_strategy::reset) {
+                remark(3) << "new subgraph is created. Impossible to schedule subgraph with "
+                        << body_parameters.size() << " inputs and " << body_results.size() << " outputs." << std::endl;
 
-            auto single_node_subgraph = op::Subgraph::wrap_node_as_subgraph(node);
-            ngraph::replace_node(node, single_node_subgraph);
-            return true;
+                auto single_node_subgraph = op::Subgraph::wrap_node_as_subgraph(node);
+                ngraph::replace_node(node, single_node_subgraph);
+                return true;
+            } else {
+                return false;
+            }
         }
 
         auto body = op::create_body(node->get_friendly_name(), body_results, body_parameters);
@@ -323,21 +334,29 @@ ngraph::pass::CollapseSubgraph::CollapseSubgraph(bool tokenize_by_node) : GraphR
         }
 
         if (outputs_are_not_broadcastable(subgraph)) {
-            remark(3) << "New subgraph is created due to outputs of a subgraph not broadcastable." << std::endl;
+            if (strategy == continuation_strategy::reset) {
+                remark(3) << "New subgraph is created due to outputs of a subgraph not broadcastable." << std::endl;
 
-            auto single_node_subgraph = op::Subgraph::wrap_node_as_subgraph(node);
-            single_node_subgraph->validate_and_infer_types();
-            ngraph::replace_node(node, single_node_subgraph);
-            return true;
+                auto single_node_subgraph = op::Subgraph::wrap_node_as_subgraph(node);
+                single_node_subgraph->validate_and_infer_types();
+                ngraph::replace_node(node, single_node_subgraph);
+                return true;
+            } else {
+                return false;
+            }
         }
 
         if (has_cycles_of_dependencies(subgraph_result_inputs, subgraph->inputs())) {
-            remark(3) << "New subgraph is created due to loop dependency introduced by one of input subgraphs." << std::endl;
+            if (strategy == continuation_strategy::reset) {
+                remark(3) << "New subgraph is created due to loop dependency introduced by one of input subgraphs." << std::endl;
 
-            auto single_node_subgraph = op::Subgraph::wrap_node_as_subgraph(node);
-            single_node_subgraph->validate_and_infer_types();
-            ngraph::replace_node(node, single_node_subgraph);
-            return true;
+                auto single_node_subgraph = op::Subgraph::wrap_node_as_subgraph(node);
+                single_node_subgraph->validate_and_infer_types();
+                ngraph::replace_node(node, single_node_subgraph);
+                return true;
+            } else {
+                return false;
+            }
         }
 
         for (size_t i = 0; i < subgraph->get_output_size(); ++i) {
@@ -363,7 +382,7 @@ ngraph::pass::CollapseSubgraph::CollapseSubgraph(bool tokenize_by_node) : GraphR
         return true;
     };
 
-    auto hasSomeSubgraphInput = [](std::shared_ptr<Node> node) -> bool {
+    auto has_subgraph_as_input = [](std::shared_ptr<Node> node) -> bool {
         auto inputs = node->inputs();
         for (auto input : inputs) {
             auto parent = input.get_source_output().get_node_shared_ptr();
@@ -438,29 +457,45 @@ ngraph::pass::CollapseSubgraph::CollapseSubgraph(bool tokenize_by_node) : GraphR
     };
 
     auto is_lo = [is_lou, is_lob, is_lot, is_fq](std::shared_ptr<Node> n) -> bool { return is_lou(n) || is_lob(n) /*|| is_lot(n) || is_fq(n)*/; };
+
+    auto has_multiple_output_edges = [](std::shared_ptr<Node> n) -> bool {
+        for (auto out : n->outputs()) {
+            if (out.get_target_inputs().size() != 1) return true;
+        }
+
+        return false;
+    };
+
+    auto has_supported_in_out = [](std::shared_ptr<Node> n) -> bool {
+        for (auto in : n->inputs()) {
+            if (in.get_tensor().get_element_type() != ngraph::element::f32) {
+                return false;
+            }
+        }
+
+        for (auto out : n->outputs()) {
+            if (out.get_tensor().get_element_type() != ngraph::element::f32) {
+                return false;
+            }
+
+            for (auto in_out : out.get_target_inputs()) {
+                if (!!as_type_ptr<ngraph::op::v5::Loop>(in_out.get_node()->shared_from_this())) {
+                    return false;
+                }
+            }
+        }
+
+        return true;
+    };
+
     NGRAPH_SUPPRESS_DEPRECATED_START
     this->add_matcher(std::make_shared<pattern::Matcher>(
         std::make_shared<pattern::op::Label>(pattern::any_input(),
-        [hasSomeSubgraphInput, is_lo, tokenize_by_node](std::shared_ptr<Node> n) {
-            for (auto in : n->inputs()) {
-                if (in.get_tensor().get_element_type() != ngraph::element::f32) {
-                    return false;
-                }
-            }
-
-            for (auto out : n->outputs()) {
-                if (out.get_tensor().get_element_type() != ngraph::element::f32) {
-                    return false;
-                }
-
-                for (auto in_out : out.get_target_inputs()) {
-                    if (!!as_type_ptr<ngraph::op::v5::Loop>(in_out.get_node()->shared_from_this())) {
-                        return false;
-                    }
-                }
-            }
-
-            return is_lo(n) && (tokenize_by_node || !hasSomeSubgraphInput(n));
+        [has_supported_in_out, has_subgraph_as_input, is_lo, tokenize_by_node, has_multiple_output_edges](std::shared_ptr<Node> n) {
+            return is_lo(n) &&
+                   has_supported_in_out(n) &&
+                   (tokenize_by_node || !has_subgraph_as_input(n)) &&
+                   has_multiple_output_edges(n);
         }),
         "CollapseSubgraphNew"),
         [](ngraph::pattern::Matcher &m) -> bool {
@@ -485,25 +520,10 @@ ngraph::pass::CollapseSubgraph::CollapseSubgraph(bool tokenize_by_node) : GraphR
 
     this->add_matcher(std::make_shared<pattern::Matcher>(
         std::make_shared<pattern::op::Label>(pattern::any_input(),
-        [hasSomeSubgraphInput, is_lo](std::shared_ptr<Node> n) {
-            for (auto in : n->inputs()) {
-                if (in.get_tensor().get_element_type() != ngraph::element::f32) {
-                    return false;
-                }
-            }
-
-            for (auto out : n->outputs()) {
-                if (out.get_tensor().get_element_type() != ngraph::element::f32) {
-                    return false;
-                }
-
-                for (auto in_out : out.get_target_inputs()) {
-                    if (!!as_type_ptr<ngraph::op::v5::Loop>(in_out.get_node()->shared_from_this())) {
-                        return false;
-                    }
-                }
-            }
-        return is_lo(n) && hasSomeSubgraphInput(n);
+        [has_supported_in_out, has_subgraph_as_input, is_lo](std::shared_ptr<Node> n) {
+        return is_lo(n) &&
+               has_supported_in_out(n) &&
+               has_subgraph_as_input(n);
         }), "CollapseSubgraphPart"),
         continuation_callback, PassProperty::CHANGE_DYNAMIC_STATE);
     NGRAPH_SUPPRESS_DEPRECATED_END

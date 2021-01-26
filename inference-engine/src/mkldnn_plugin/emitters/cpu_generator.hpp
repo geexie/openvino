@@ -21,7 +21,7 @@ public:
     ~jit_snippet() = default;
 
     jit_snippet() : jit_generator() {
-        auto ker_ = this->getCode();
+        // auto ker_ = this->getCode();
     }
 };
 
