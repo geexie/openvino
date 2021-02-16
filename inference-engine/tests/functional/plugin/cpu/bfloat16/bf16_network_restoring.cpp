@@ -199,13 +199,13 @@ TEST_P(BF16NetworkRestore1, CompareWithRefImpl) {
 };
 
 
-INSTANTIATE_TEST_CASE_P(smoke_BF16_bfloat16_NoReshape, BF16NetworkRestore1,
-                        ::testing::Combine(
-                            ::testing::Values(Precision::FP32),
-                            ::testing::Values(Precision::BF16),
-                            ::testing::Values(SizeVector({ 1, 3, 224, 224 })),
-                            ::testing::Values(SizeVector()),
-                            ::testing::Values(CommonTestUtils::DEVICE_CPU)),
-                        BF16NetworkRestore1::getTestCaseName);
+// INSTANTIATE_TEST_CASE_P(smoke_BF16_bfloat16_NoReshape, BF16NetworkRestore1,
+//                         ::testing::Combine(
+//                             ::testing::Values(Precision::FP32),
+//                             ::testing::Values(Precision::BF16),
+//                             ::testing::Values(SizeVector({ 1, 3, 224, 224 })),
+//                             ::testing::Values(SizeVector()),
+//                             ::testing::Values(CommonTestUtils::DEVICE_CPU)),
+//                         BF16NetworkRestore1::getTestCaseName);
 
 }  // namespace LayerTestsDefinitions

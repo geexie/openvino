@@ -19,7 +19,7 @@ namespace {
     // std::vector<size_t> input_size{10};
     std::vector<size_t> sequence_axis{0, 1};
     std::vector<ngraph::helpers::TensorIteratorBody> body_type
-        = {ngraph::helpers::TensorIteratorBody::LSTM, ngraph::helpers::TensorIteratorBody::RNN,
+        = {/*ngraph::helpers::TensorIteratorBody::LSTM,*/ ngraph::helpers::TensorIteratorBody::RNN,
            ngraph::helpers::TensorIteratorBody::GRU};
     std::vector<float> clip{0.f};
     std::vector<float> clip_non_zeros{0.7f};
