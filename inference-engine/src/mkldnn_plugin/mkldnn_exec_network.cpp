@@ -237,8 +237,9 @@ MKLDNNExecNetwork::MKLDNNExecNetwork(const InferenceEngine::CNNNetwork &network,
         graph->CreateGraph(localNetwork, extensionManager, numaNodesWeights[numaNode]);
         return graph;
     }};
-
-    _taskExecutor->runAndWait({std::thread::hardware_concurrency(), [this] {_graphs.local();}});
+    // unsigned int nthreads = std::thread::hardware_concurrency();
+    unsigned int nthreads = 1;
+    _taskExecutor->runAndWait({nthreads, [this] {_graphs.local();}});
 
     // Save all MemoryLayer data tensors. Will use insight about mechanics
     // of MemoryLayer implementation. It uses output edge of MemoryLayer

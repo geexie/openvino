@@ -62,6 +62,8 @@
 #include <transformations/rt_info/fused_names_attribute.hpp>
 #include <transformations/op_conversions/fq_decomposition.hpp>
 #include <transformations/utils/utils.hpp>
+#include <transformations/snippets/collapse_subgraph.hpp>
+#include <transformations/snippets/subgraph.hpp>
 
 #include <ngraph/opsets/opset2.hpp>
 #include <ngraph/opsets/opset3.hpp>
@@ -80,6 +82,16 @@
 
 #include "nodes/mkldnn_mvn_node.h"
 #include "nodes/mkldnn_quantize_node.h"
+// WA for xbyak.h
+#ifdef _WIN32
+# ifndef _WINSOCKAPI_
+#  define _WINSOCKAPI_
+# endif
+# ifndef _WINSOCK2API_
+#  define _WINSOCK2API_
+#endif
+#endif
+#include <cpu/x64/cpu_isa_traits.hpp>
 
 #if !defined(__arm__) && !defined(_M_ARM) && !defined(__aarch64__) && !defined(_M_ARM64)
 # ifdef _WIN32
@@ -92,6 +104,8 @@
 
 using namespace MKLDNNPlugin;
 using namespace InferenceEngine;
+
+// #define DUMP_TOKENIZATION
 
 Engine::Engine() {
     _pluginName = "CPU";
@@ -216,6 +230,13 @@ static void Transformation(CNNNetwork& clonedNetwork, const Config& conf) {
                 return MKLDNNMVNNode::checkAxesSuitability(node);
             });
 
+    bool tokenizeSubgraphs = conf.tokenizationMode;
+    if (/*mkldnn::impl::cpu::x64::mayiuse(mkldnn::impl::cpu::x64::cpu_isa_t::avx512_common) ||*/
+        !mkldnn::impl::cpu::x64::mayiuse(mkldnn::impl::cpu::x64::cpu_isa_t::avx2)) {
+        // forse disable subgraph tokenization. SS supports only AVX2. Try AVX2 on AVX512 for debug purpose
+        tokenizeSubgraphs = Config::TokenizationMode::Disabled;
+    }
+
     // List of enabled/disabled transformations
     pass_config->disable<ngraph::pass::ConvertGELU>();
     pass_config->disable<ngraph::pass::HSwishDecomposition>();
@@ -262,6 +283,44 @@ static void Transformation(CNNNetwork& clonedNetwork, const Config& conf) {
     }
 
     bool has_fake_quantize = ::ngraph::op::util::has_op_with_type<ngraph::op::FakeQuantize>(nGraphFunc);
+    bool enableInt8 = conf.lpTransformsMode == Config::LPTransformsMode::On
+                    && ngraph::pass::low_precision::LowPrecisionTransformer::isFunctionQuantized(nGraphFunc);
+
+    if (conf.enforceBF16 == true || enableInt8) {
+        // forse disable subgraph tokenization. SS doesn't support bf16 & int8 yet.
+        tokenizeSubgraphs = Config::TokenizationMode::Disabled;
+    }
+
+    if (tokenizeSubgraphs != Config::TokenizationMode::Disabled) {
+#if defined (DUMP_TOKENIZATION)
+        std::cout << "Tokenization is ON" << std::endl;
+        for (auto op : nGraphFunc->get_ordered_ops()) {
+            std::cout << op << std::endl;
+            if (auto constant = ngraph::as_type_ptr<ngraph::opset1::Constant>(op)) {
+                std::cout << "constant value " << reinterpret_cast<const float*>(constant->get_data_ptr())[0] << std::endl;
+            }
+        }
+        ngraph::pass::VisualizeTree("original.svg").run_on_function(nGraphFunc);
+        std::cout << std::endl << std::endl;
+#endif
+        ngraph::pass::Manager tokenization_manager;
+        tokenization_manager.register_pass<ngraph::pass::CollapseSubgraph>(tokenizeSubgraphs == Config::TokenizationMode::Node);
+        tokenization_manager.run_passes(nGraphFunc);
+#if defined (DUMP_TOKENIZATION)
+        for (auto op : nGraphFunc->get_ordered_ops()) {
+            std::cout << op << std::endl;
+        }
+        ngraph::pass::VisualizeTree("tokenized.svg").run_on_function(nGraphFunc);
+
+        int subgraph_index = 0;
+        for (auto op : nGraphFunc->get_ordered_ops()) {
+            std::cout << op << std::endl;
+            if (auto subgraph = ngraph::as_type_ptr<ngraph::op::Subgraph>(op)) {
+                ngraph::pass::VisualizeTree(std::string("subgraph")+std::to_string(subgraph_index++)+".svg").run_on_function(subgraph->get_body());
+            }
+        }
+#endif
+    }
 
     ngraph::pass::Manager legacyManager;
 

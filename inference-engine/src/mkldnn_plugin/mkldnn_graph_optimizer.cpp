@@ -115,8 +115,12 @@ void MKLDNNGraphOptimizer::ApplyCommonGraphOptimizations(MKLDNNGraph &graph) {
     FuseFullyConnectedAndSimpleOperation(graph);
     graph.RemoveDroppedNodes();
 
-    FuseMVNAndSimpleOperation(graph);
-    graph.RemoveDroppedNodes();
+    // temporary disable since on reid fusing 2 `ScaleShift`s
+    // 563/Ins_Norm/add_
+    // 565/Ins_Norm/add_
+    // significantly drops accuracy
+    // FuseMVNAndSimpleOperation(graph);
+    // graph.RemoveDroppedNodes();
 
     FuseInterpolateAndSimpleOperation(graph);
     graph.RemoveDroppedNodes();
